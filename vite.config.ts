@@ -7,6 +7,8 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registered manually in main.tsx so the native (Capacitor) build can skip it.
+      injectRegister: null,
       includeAssets: ['icon.svg'],
       manifest: {
         name: 'Sheet Beater',

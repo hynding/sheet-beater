@@ -3,5 +3,6 @@ dist
 dev-dist
 .DS_Store
 *.log
-android
-ios
+android/keystore.properties
+*.jks
+*.keystore

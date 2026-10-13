@@ -2,7 +2,14 @@
   "appId": "com.sheetbeater.app",
   "appName": "Sheet Beater",
   "webDir": "dist",
-  "server": {
-    "androidScheme": "https"
+  "backgroundColor": "#121318",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#121318"
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#121318",
+    "preferredContentMode": "mobile"
   }
 }
