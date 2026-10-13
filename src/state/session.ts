@@ -1,17 +1,19 @@
-import type { Settings } from '../music/difficulty';
-import type { Prompt } from '../music/generator';
-import { spellingToLabel } from '../music/notes';
+import type { SessionConfig } from '../music/difficulty';
+import { eventLabel, type Prompt } from '../music/generator';
+import type { Timing } from './judge';
 
 export interface Answer {
   prompt: Prompt;
-  /** MIDI pitch played, or null when the note timed out. */
-  playedMidi: number | null;
+  eventIndex: number;
+  /** MIDI pitches played for this event (empty when it timed out or was missed). */
+  played: number[];
   correct: boolean;
   responseMs: number;
+  timing: Timing;
 }
 
 export interface SessionResult {
-  settings: Settings;
+  config: SessionConfig;
   answers: Answer[];
   startedAt: number;
   endedAt: number;
@@ -35,6 +37,7 @@ export interface Summary {
   timeouts: number;
   missed: Answer[];
   byNote: NoteStat[];
+  timing: Record<Timing, number>;
   durationMs: number;
 }
 
@@ -56,7 +59,7 @@ export function summarize(result: SessionResult): Summary {
 
   const stats = new Map<string, NoteStat & { totalMs: number }>();
   for (const a of answers) {
-    const label = spellingToLabel(a.prompt.spelling);
+    const label = eventLabel(a.prompt.events[a.eventIndex]);
     const key = `${a.prompt.clef}:${label}`;
     const s = stats.get(key) ?? { label, clef: a.prompt.clef, asked: 0, correct: 0, avgMs: 0, totalMs: 0 };
     s.asked += 1;
@@ -70,6 +73,9 @@ export function summarize(result: SessionResult): Summary {
     .map(({ totalMs, ...s }) => ({ ...s, avgMs: s.correct ? totalMs / s.correct : 0 }))
     .sort((a, b) => a.correct / a.asked - b.correct / b.asked || b.avgMs - a.avgMs);
 
+  const timing: Record<Timing, number> = { perfect: 0, good: 0, early: 0, late: 0, miss: 0, none: 0 };
+  for (const a of answers) timing[a.timing] += 1;
+
   return {
     total,
     correct,
@@ -77,9 +83,10 @@ export function summarize(result: SessionResult): Summary {
     avgMs,
     medianMs,
     bestStreak,
-    timeouts: answers.filter((a) => a.playedMidi === null).length,
+    timeouts: answers.filter((a) => a.played.length === 0).length,
     missed: answers.filter((a) => !a.correct),
     byNote,
+    timing,
     durationMs: result.endedAt - result.startedAt,
   };
 }

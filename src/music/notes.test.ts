@@ -3,9 +3,11 @@ import {
   midiToSpelling,
   spellingToMidi,
   spellingToVexKey,
+  spellingToLabel,
   midiToName,
   diatonicIndex,
   spellingFromDiatonic,
+  parseNoteName,
   whiteKeysBetween,
   floorToC,
   ceilToB,
@@ -28,7 +30,8 @@ describe('notes', () => {
   });
 
   it('formats VexFlow keys and names', () => {
-    expect(spellingToVexKey({ letter: 'F', accidental: '#', octave: 5 })).toBe('f#/5');
+    expect(spellingToVexKey({ letter: 'F', accidental: '#', octave: 5 })).toBe('f/5');
+    expect(spellingToLabel({ letter: 'F', accidental: 'n', octave: 4 })).toBe('F♮4');
     expect(midiToName(70)).toBe('A#4');
     expect(midiToName(70, 'flat')).toBe('Bb4');
   });
@@ -38,6 +41,8 @@ describe('notes', () => {
     expect(diatonicIndex('B', 3)).toBe(27);
     expect(spellingFromDiatonic(28)).toEqual({ letter: 'C', accidental: '', octave: 4 });
     expect(spellingFromDiatonic(27)).toEqual({ letter: 'B', accidental: '', octave: 3 });
+    expect(parseNoteName('F#4')).toEqual({ index: diatonicIndex('F', 4), accidental: '#' });
+    expect(parseNoteName('Bb3')).toEqual({ index: diatonicIndex('B', 3), accidental: 'b' });
   });
 
   it('counts white keys and snaps to octaves', () => {

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { isBlackKey, midiToName, whiteKeyIndex, whiteKeysBetween, MIDDLE_C } from '../music/notes';
 import { useElementSize } from './useElementSize';
 
-export type KeyHighlight = 'pressed' | 'correct' | 'wrong' | 'answer';
+export type KeyHighlight = 'pressed' | 'held' | 'correct' | 'wrong' | 'answer';
 
 interface PianoProps {
   low: number;

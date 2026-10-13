@@ -1,26 +1,54 @@
 import { useMemo } from 'react';
+import type { Lesson } from '../curriculum/lessons';
+import type { Stars } from '../curriculum/progress';
 import { PRESETS, type PresetId } from '../music/difficulty';
-import { midiToName, spellingToLabel } from '../music/notes';
+import { midiToName } from '../music/notes';
 import { summarize, type SessionResult } from '../state/session';
+import { eventLabel } from '../music/generator';
+import { StarRow } from './LearnPath';
 
 interface ResultsScreenProps {
   result: SessionResult;
+  /** Set when the session was a lesson. */
+  lesson?: Lesson;
+  stars?: Stars;
+  improved?: boolean;
+  nextLesson?: Lesson;
+  presetId?: PresetId | 'custom';
   onPlayAgain: () => void;
-  onChangeSettings: () => void;
-  onLevelUp: (preset: PresetId) => void;
+  onNext?: () => void;
+  onLevelUp?: (preset: PresetId) => void;
+  onBack: () => void;
 }
 
 function formatSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)} s`;
 }
 
-export function ResultsScreen({ result, onPlayAgain, onChangeSettings, onLevelUp }: ResultsScreenProps) {
+export function ResultsScreen({ result, lesson, stars, improved, nextLesson, presetId, onPlayAgain, onNext, onLevelUp, onBack }: ResultsScreenProps) {
   const s = useMemo(() => summarize(result), [result]);
   const pct = Math.round(s.accuracy * 100);
-  const presetIndex = PRESETS.findIndex((p) => p.id === result.settings.preset);
-  const nextPreset = presetIndex >= 0 && presetIndex < PRESETS.length - 1 && pct >= 90 ? PRESETS[presetIndex + 1] : null;
+  const isRhythm = result.config.mode === 'rhythm';
+  const presetIndex = PRESETS.findIndex((p) => p.id === presetId);
+  const nextPreset = !lesson && presetIndex >= 0 && presetIndex < PRESETS.length - 1 && pct >= 90 ? PRESETS[presetIndex + 1] : null;
   const weakNotes = s.byNote.filter((n) => n.correct < n.asked).slice(0, 8);
-  const grade = pct >= 95 ? 'Outstanding' : pct >= 85 ? 'Great work' : pct >= 70 ? 'Good progress' : 'Keep practising';
+  const grade = lesson
+    ? stars === 3
+      ? 'Mastered'
+      : stars === 2
+        ? 'Well done'
+        : stars === 1
+          ? 'Passed'
+          : 'Not yet'
+    : pct >= 95
+      ? 'Outstanding'
+      : pct >= 85
+        ? 'Great work'
+        : pct >= 70
+          ? 'Good progress'
+          : 'Keep practising';
+  const unitLabel = result.config.mode === 'chord' ? 'chords' : result.config.mode === 'rhythm' ? 'notes in time' : 'notes';
+  const timed = s.timing.perfect + s.timing.good + s.timing.early + s.timing.late + s.timing.miss;
 
   return (
     <div className="screen results">
@@ -29,28 +57,54 @@ export function ResultsScreen({ result, onPlayAgain, onChangeSettings, onLevelUp
         <div>
           <h1 className="results__grade">{grade}</h1>
           <p className="muted">
-            {s.correct} of {s.total} notes right in {formatSeconds(s.durationMs)}.
+            {lesson ? `${lesson.title}: ` : ''}
+            {s.correct} of {s.total} {unitLabel} right in {formatSeconds(s.durationMs)}.
           </p>
         </div>
+        {lesson && stars !== undefined && (
+          <div className="results__stars">
+            <StarRow stars={stars} size="big" />
+            <span className="muted small">
+              {stars === 0 ? `Need ${Math.round(lesson.mastery * 100)}% to pass` : improved ? 'New best!' : 'Best kept'}
+            </span>
+          </div>
+        )}
       </header>
 
       <section className="results__body">
         <div className="tiles">
-          <div className="tile">
-            <span className="tile__value">{s.correct ? formatSeconds(s.avgMs) : '–'}</span>
-            <span className="tile__label">Average time</span>
-          </div>
-          <div className="tile">
-            <span className="tile__value">{s.correct ? formatSeconds(s.medianMs) : '–'}</span>
-            <span className="tile__label">Median time</span>
-          </div>
+          {isRhythm ? (
+            <>
+              <div className="tile">
+                <span className="tile__value">{timed ? Math.round((s.timing.perfect / timed) * 100) : 0}%</span>
+                <span className="tile__label">Perfectly on the beat</span>
+              </div>
+              <div className="tile">
+                <span className="tile__value">
+                  {s.timing.early} / {s.timing.late}
+                </span>
+                <span className="tile__label">Early / late</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="tile">
+                <span className="tile__value">{s.correct ? formatSeconds(s.avgMs) : '–'}</span>
+                <span className="tile__label">Average time{lesson?.targetMs ? ` (goal ${formatSeconds(lesson.targetMs)})` : ''}</span>
+              </div>
+              <div className="tile">
+                <span className="tile__value">{s.correct ? formatSeconds(s.medianMs) : '–'}</span>
+                <span className="tile__label">Median time</span>
+              </div>
+            </>
+          )}
           <div className="tile">
             <span className="tile__value">{s.bestStreak}</span>
             <span className="tile__label">Best streak</span>
           </div>
           <div className="tile">
             <span className="tile__value">{s.missed.length}</span>
-            <span className="tile__label">Missed{s.timeouts ? ` (${s.timeouts} timed out)` : ''}</span>
+            <span className="tile__label">Missed{isRhythm ? (s.timing.miss ? ` (${s.timing.miss} not played)` : '') : s.timeouts ? ` (${s.timeouts} timed out)` : ''}</span>
           </div>
         </div>
 
@@ -77,7 +131,9 @@ export function ResultsScreen({ result, onPlayAgain, onChangeSettings, onLevelUp
               <ul className="misses">
                 {s.missed.map((a, i) => (
                   <li key={i}>
-                    {spellingToLabel(a.prompt.spelling)} ({a.prompt.clef}) → {a.playedMidi === null ? 'timed out' : `played ${midiToName(a.playedMidi)}`}
+                    {eventLabel(a.prompt.events[a.eventIndex])} ({a.prompt.clef}) →{' '}
+                    {a.played.length === 0 ? (isRhythm ? 'not played' : 'timed out') : `played ${a.played.map((m) => midiToName(m)).join('+')}`}
+                    {isRhythm && a.timing !== 'miss' && a.timing !== 'none' ? `, ${a.timing}` : ''}
                   </li>
                 ))}
               </ul>
@@ -87,13 +143,18 @@ export function ResultsScreen({ result, onPlayAgain, onChangeSettings, onLevelUp
       </section>
 
       <footer className="results__footer">
-        <button type="button" className="btn" onClick={onChangeSettings}>
-          Change settings
+        <button type="button" className="btn" onClick={onBack}>
+          {lesson ? 'Back to path' : 'Change settings'}
         </button>
-        <button type="button" className="btn btn--primary" onClick={onPlayAgain}>
-          Play again
+        <button type="button" className={`btn${lesson && stars === 0 ? ' btn--primary' : ''}`} onClick={onPlayAgain}>
+          {lesson ? 'Retry' : 'Play again'}
         </button>
-        {nextPreset && (
+        {lesson && nextLesson && stars !== undefined && stars > 0 && onNext && (
+          <button type="button" className="btn btn--primary" onClick={onNext}>
+            Next: {nextLesson.title} →
+          </button>
+        )}
+        {nextPreset && onLevelUp && (
           <button type="button" className="btn btn--accent" onClick={() => onLevelUp(nextPreset.id)}>
             Try {nextPreset.name} →
           </button>

@@ -1,25 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS } from '../music/difficulty';
+import { BASE_CONFIG } from '../music/difficulty';
 import type { Prompt } from '../music/generator';
+import { diatonicIndex, type Letter } from '../music/notes';
 import { summarize, type Answer } from './session';
 
-const p = (id: number, midi: number, letter: Prompt['spelling']['letter'], octave: number): Prompt => ({
+const p = (id: number, midi: number, letter: Letter, octave: number): Prompt => ({
   id,
-  midi,
+  mode: 'single',
   clef: 'treble',
-  spelling: { letter, accidental: '', octave },
+  key: 'C',
+  events: [{ notes: [{ letter, accidental: '', octave, midi, index: diatonicIndex(letter, octave) }], duration: 'w', beat: 0, rest: false }],
 });
 
 describe('summarize', () => {
   it('computes accuracy, streaks and per-note stats', () => {
     const answers: Answer[] = [
-      { prompt: p(0, 60, 'C', 4), playedMidi: 60, correct: true, responseMs: 1000 },
-      { prompt: p(1, 62, 'D', 4), playedMidi: 62, correct: true, responseMs: 500 },
-      { prompt: p(2, 64, 'E', 4), playedMidi: 65, correct: false, responseMs: 900 },
-      { prompt: p(3, 60, 'C', 4), playedMidi: 60, correct: true, responseMs: 300 },
-      { prompt: p(4, 64, 'E', 4), playedMidi: null, correct: false, responseMs: 4000 },
+      { prompt: p(0, 60, 'C', 4), eventIndex: 0, played: [60], correct: true, responseMs: 1000, timing: 'none' },
+      { prompt: p(1, 62, 'D', 4), eventIndex: 0, played: [62], correct: true, responseMs: 500, timing: 'none' },
+      { prompt: p(2, 64, 'E', 4), eventIndex: 0, played: [65], correct: false, responseMs: 900, timing: 'none' },
+      { prompt: p(3, 60, 'C', 4), eventIndex: 0, played: [60], correct: true, responseMs: 300, timing: 'none' },
+      { prompt: p(4, 64, 'E', 4), eventIndex: 0, played: [], correct: false, responseMs: 4000, timing: 'none' },
     ];
-    const s = summarize({ settings: DEFAULT_SETTINGS, answers, startedAt: 0, endedAt: 10_000 });
+    const s = summarize({ config: BASE_CONFIG, answers, startedAt: 0, endedAt: 10_000 });
     expect(s.total).toBe(5);
     expect(s.correct).toBe(3);
     expect(s.accuracy).toBeCloseTo(0.6);
@@ -31,10 +33,11 @@ describe('summarize', () => {
     expect(s.byNote[0].label).toBe('E4'); // weakest first
     expect(s.byNote[0]).toMatchObject({ asked: 2, correct: 0 });
     expect(s.byNote.find((n) => n.label === 'C4')).toMatchObject({ asked: 2, correct: 2, avgMs: 650 });
+    expect(s.timing.none).toBe(5);
   });
 
   it('handles an empty session', () => {
-    const s = summarize({ settings: DEFAULT_SETTINGS, answers: [], startedAt: 0, endedAt: 0 });
+    const s = summarize({ config: BASE_CONFIG, answers: [], startedAt: 0, endedAt: 0 });
     expect(s.accuracy).toBe(0);
     expect(s.avgMs).toBe(0);
   });

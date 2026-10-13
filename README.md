@@ -6,13 +6,25 @@ Runs in any modern browser (desktop or mobile, designed for landscape) and ships
 
 ## Features
 
+**Learn**: a guided path of 8 units and 37 lessons, each introducing one idea with a short teaching card (and a preview staff with named notes) before the exercise. Lessons earn up to three stars (accuracy for the first, speed or timing precision for the rest) and each star unlocks the next lesson. Progress is saved on the device.
+
+1. The treble clef: landmarks, lines, spaces, the whole staff, ledger lines
+2. The bass clef: the same journey
+3. The grand staff: both clefs, middle C from both sides, notes written on either staff
+4. Reading phrases: several notes at a time, reading by step and skip
+5. Sharps and flats, including accidentals that last for the bar
+6. Key signatures from one to four sharps or flats, naturals that cancel them
+7. Chords: intervals, triads, inversions, in keys
+8. Rhythm: a metronome counts in and a cursor crosses the bar; quarter, half, whole and eighth notes, rests, 3/4 time
+
+**Free practice**: five presets plus a fully custom mix of exercise type (single notes, phrases, chords, rhythm), staff, ledger lines, accidentals, key signatures, chord shapes, tempo, time signature, note values, session length and a per-note timer.
+
 - Treble, bass or grand staff, rendered with [VexFlow](https://www.vexflow.com/).
-- Five difficulty presets plus fully custom settings: ledger lines (0–3), sharps and flats with an adjustable frequency, notes per session and an optional per-note timer.
 - On-screen piano that scales to the screen. Key width follows the note range of the session; the keyboard height is a start-screen setting (small, medium, large). If keys would get too small to tap, the keyboard keeps a minimum key size and scrolls sideways.
 - Three ways to play: tap the on-screen keys, use the computer keyboard (`A`–`K` white keys, `W E T Y U` black keys, `Z`/`X` shift octave) or plug in a MIDI keyboard (Web MIDI, Chrome and Edge).
 - Built-in synth so every key you press is heard; after a mistake the correct note is played and highlighted.
 - Key names on the piano: always, never, or only on keys you have missed.
-- Results screen with accuracy, average and median response time, best streak, timeouts, weakest notes and a one-tap "try the next level" when you score 90% or more.
+- Results screen with accuracy, response times (or on-the-beat precision for rhythm), best streak, weakest notes, every miss, stars earned and a one-tap "next lesson" or "try the next level".
 - Installable PWA with a landscape manifest; settings persist between visits.
 
 ## Getting started
@@ -79,12 +91,13 @@ Every time the web code changes, run `npm run cap:sync` before building the nati
 
 ```
 src/
-  music/        pitch helpers, difficulty presets, note generator (unit tested)
-  state/        session results and summary statistics (unit tested)
+  music/        pitch helpers, key signatures, session config and presets, prompt generator (unit tested)
+  curriculum/   lesson content and progress/stars/unlocking (unit tested)
+  state/        input judging (timing, chords) and session summaries (unit tested)
   audio/        Web Audio synth
   input/        Web MIDI and computer-keyboard hooks
   components/   Staff (VexFlow) and Piano
-  screens/      Start, Practice and Results screens
+  screens/      Start (Learn path + Free practice), Lesson intro, Practice and Results screens
 android/        Capacitor Android project (open in Android Studio)
 ios/            Capacitor iOS project (open in Xcode, macOS only)
 assets/         source images for app icons and splash screens
