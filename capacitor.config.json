@@ -1,0 +1,8 @@
+{
+  "appId": "com.sheetbeater.app",
+  "appName": "Sheet Beater",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
