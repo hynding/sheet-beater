@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import { Accidental, Annotation, Beam, Dot, Formatter, ModifierContext, Renderer, Stave, StaveConnector, StaveNote, TickContext, Voice } from 'vexflow/bravura';
+import { Accidental, Annotation, Beam, Dot, Formatter, Fraction, ModifierContext, Renderer, Stave, StaveConnector, StaveNote, TickContext, Voice } from 'vexflow/bravura';
 import type { ClefMode } from '../music/difficulty';
 import { DURATION_BEATS, labelFor, type Prompt } from '../music/generator';
 import { spellingToVexKey } from '../music/notes';
@@ -12,6 +12,8 @@ interface StaffProps {
   prompt: Prompt | null;
   /** Visual state per event; missing entries are 'pending'. */
   states?: EventState[];
+  /** Visual state per event of the secondary part. */
+  secondaryStates?: EventState[];
   /** Print note names under the notes (lesson previews). */
   labels?: boolean;
   /** Rhythm mode: cursor position in quarter-note beats from the start of the bar, or null to hide. */
@@ -40,13 +42,13 @@ interface Layout {
  * Draws one prompt (a note, a chord, a phrase or a bar) on a treble, bass or
  * grand staff with VexFlow. Re-renders from scratch on every change.
  */
-export function Staff({ clefMode, prompt, states = [], labels = false, playheadBeat = null }: StaffProps) {
+export function Staff({ clefMode, prompt, states = [], secondaryStates = [], labels = false, playheadBeat = null }: StaffProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
   const layoutRef = useRef<Layout | null>(null);
   const { width, height } = useElementSize(containerRef);
-  const stateKey = states.join(',');
+  const stateKey = `${states.join(',')}|${secondaryStates.join(',')}`;
 
   useLayoutEffect(() => {
     const host = hostRef.current;
@@ -80,13 +82,13 @@ export function Staff({ clefMode, prompt, states = [], labels = false, playheadB
     const stave = prompt ? staves[prompt.clef] : undefined;
     if (!prompt || !stave || prompt.events.length === 0) return;
 
-    const notes = prompt.events.map((event, i) => {
-      const state = states[i] ?? 'pending';
+    const buildNotes = (events: Prompt['events'], clef: Prompt['clef'], eventStates: EventState[]) => events.map((event, i) => {
+      const state = eventStates[i] ?? 'pending';
       const color = event.rest ? REST_COLOR : COLORS[state];
       const sorted = [...event.notes].sort((a, b) => a.index - b.index);
-      const keys = event.rest ? [prompt.clef === 'treble' ? 'b/4' : 'd/3'] : sorted.map(spellingToVexKey);
-      const duration = event.rest ? event.duration : event.duration;
-      const note = new StaveNote({ keys, duration, clef: prompt.clef, autoStem: true });
+      const keys = event.rest ? [clef === 'treble' ? 'b/4' : 'd/3'] : sorted.map(spellingToVexKey);
+      const duration = event.duration;
+      const note = new StaveNote({ keys, duration, clef, autoStem: true });
       sorted.forEach((n, idx) => {
         if (n.accidental) note.addModifier(new Accidental(n.accidental), idx);
       });
@@ -102,10 +104,36 @@ export function Staff({ clefMode, prompt, states = [], labels = false, playheadB
       note.setStemStyle({ fillStyle: color, strokeStyle: color });
       return note;
     });
+    const notes = buildNotes(prompt.events, prompt.clef, states);
 
     const totalBeats = prompt.events.reduce((s, e) => s + DURATION_BEATS[e.duration], 0);
     const noteStart = stave.getNoteStartX();
     const noteEnd = stave.getNoteEndX();
+    // Beam eighths by beat: dotted-quarter groups in compound metres like 12/8.
+    const beamGroups = prompt.timeSignature && prompt.timeSignature[1] === 8 ? [new Fraction(3, 8)] : [new Fraction(1, 4)];
+    const secondStave = prompt.secondary ? staves[prompt.secondary.clef] : undefined;
+
+    if (prompt.secondary && secondStave) {
+      // Two parts (player piano): format both voices against shared tick contexts.
+      const second = buildNotes(prompt.secondary.events, prompt.secondary.clef, secondaryStates);
+      const [num, den] = prompt.timeSignature ?? [4, 4];
+      const v1 = new Voice({ numBeats: num, beatValue: den }).setMode(Voice.Mode.SOFT).addTickables(notes);
+      const v2 = new Voice({ numBeats: num, beatValue: den }).setMode(Voice.Mode.SOFT).addTickables(second);
+      const beams = [...Beam.generateBeams(notes, { groups: beamGroups }), ...Beam.generateBeams(second, { groups: beamGroups })];
+      new Formatter().joinVoices([v1]).joinVoices([v2]).format([v1, v2], noteEnd - noteStart - 30);
+      v1.draw(ctx, stave);
+      v2.draw(ctx, secondStave);
+      for (const beam of beams) {
+        beam.setStyle({ fillStyle: REST_COLOR, strokeStyle: REST_COLOR });
+        beam.setContext(ctx).draw();
+      }
+      const onsets = new Map<number, number>();
+      prompt.events.forEach((e, i) => onsets.set(e.beat, Math.min(onsets.get(e.beat) ?? Infinity, notes[i].getAbsoluteX())));
+      prompt.secondary.events.forEach((e, i) => onsets.set(e.beat, Math.min(onsets.get(e.beat) ?? Infinity, second[i].getAbsoluteX())));
+      const points = [...onsets.entries()].sort((a, b) => a[0] - b[0]).map(([beat, x]) => ({ beat, x }));
+      layoutRef.current = { scale, points: [...points, { beat: totalBeats, x: noteEnd }] };
+      return;
+    }
 
     if (notes.length === 1) {
       // One note or chord: centre it in the space after the clef and signatures.
@@ -122,7 +150,7 @@ export function Staff({ clefMode, prompt, states = [], labels = false, playheadB
     }
 
     const voice = new Voice({ numBeats: Math.max(1, totalBeats), beatValue: 4 }).setMode(Voice.Mode.SOFT).addTickables(notes);
-    const beams = prompt.mode === 'rhythm' ? Beam.generateBeams(notes) : [];
+    const beams = prompt.mode === 'rhythm' ? Beam.generateBeams(notes, { groups: beamGroups }) : [];
     new Formatter().joinVoices([voice]).format([voice], noteEnd - noteStart - 30);
     voice.draw(ctx, stave);
     for (const beam of beams) {

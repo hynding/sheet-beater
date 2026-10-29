@@ -20,9 +20,10 @@ import {
 import { keyboardRangeFor } from '../music/generator';
 import { KEY_NAMES, type KeyName } from '../music/keys';
 import { midiToName } from '../music/notes';
+import { PIECES } from '../music/pieces';
 import { LearnPath } from './LearnPath';
 
-export type StartTab = 'learn' | 'free';
+export type StartTab = 'learn' | 'free' | 'play';
 
 interface StartScreenProps {
   tab: StartTab;
@@ -32,11 +33,12 @@ interface StartScreenProps {
   onStartFree: () => void;
   progress: Progress;
   onSelectLesson: (lesson: Lesson) => void;
+  onFreePlay: (pieceId: string | null) => void;
   midi: MidiStatus;
 }
 
 const TIME_LIMITS = [0, 10000, 8000, 6000, 4000, 3000, 2000];
-const DURATION_LABELS: Record<Duration, string> = { w: 'Whole', h: 'Half', hd: 'Dotted half', q: 'Quarter', '8': 'Eighths', qr: 'Quarter rest', hr: 'Half rest' };
+const DURATION_LABELS: Partial<Record<Duration, string>> = { w: 'Whole', h: 'Half', hd: 'Dotted half', q: 'Quarter', '8': 'Eighths', qr: 'Quarter rest', hr: 'Half rest' };
 const CHORD_LABELS: Record<ChordKind, string> = { interval: 'Intervals', triad: 'Triads', inversion: 'Inversions' };
 
 function toggle<T>(list: T[], item: T, min = 1): T[] {
@@ -44,7 +46,7 @@ function toggle<T>(list: T[], item: T, min = 1): T[] {
   return [...list, item];
 }
 
-export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progress, onSelectLesson, midi }: StartScreenProps) {
+export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progress, onSelectLesson, onFreePlay, midi }: StartScreenProps) {
   const [showCustom, setShowCustom] = useState(settings.preset === 'custom');
   const range = keyboardRangeFor(settings);
   const activePreset = PRESETS.find((p) => p.id === settings.preset);
@@ -67,13 +69,45 @@ export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progr
           <button type="button" className={`tab${tab === 'free' ? ' tab--active' : ''}`} onClick={() => onTab('free')}>
             Free practice
           </button>
+          <button type="button" className={`tab${tab === 'play' ? ' tab--active' : ''}`} onClick={() => onTab('play')}>
+            Free play
+          </button>
         </nav>
         <span className="muted small start__status">
-          {tab === 'learn' ? `${starred} of ${LESSONS.length} lessons passed` : 'Read the note, play the key.'}
+          {tab === 'learn' ? `${starred} of ${LESSONS.length} lessons passed` : tab === 'play' ? 'Play anything, or let the player piano show you.' : 'Read the note, play the key.'}
         </span>
       </header>
 
-      {tab === 'learn' ? (
+      {tab === 'play' ? (
+        <>
+          <section className="start__body start__body--path">
+            <div className="pieces">
+              <button type="button" className="piece piece--plain" onClick={() => onFreePlay(null)}>
+                <span className="piece__title">Just the piano</span>
+                <span className="piece__composer muted small">No sheet music. Every key sounds, with MIDI and computer keyboard input.</span>
+              </button>
+              {PIECES.map((p) => (
+                <button key={p.id} type="button" className="piece" onClick={() => onFreePlay(p.id)}>
+                  <span className="piece__title">{p.title}</span>
+                  <span className="piece__composer muted small">{p.composer}</span>
+                  <span className="piece__desc small">{p.description}</span>
+                  <span className="piece__meta muted small">
+                    {p.bars.length} bars · {p.timeSignature[0]}/{p.timeSignature[1]} · {p.tempo} bpm
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="muted small">
+              Player piano: <strong>Listen</strong> plays the piece with the keys lit up and the score following along. <strong>Play along</strong> waits for you to play each right-hand note and plays the left hand for you.
+            </p>
+          </section>
+          <footer className="start__footer">
+            <button type="button" className="btn btn--primary btn--big" onClick={() => onFreePlay(null)}>
+              Open the piano
+            </button>
+          </footer>
+        </>
+      ) : tab === 'learn' ? (
         <>
           <section className="start__body start__body--path">
             <LearnPath progress={progress} onSelect={onSelectLesson} />

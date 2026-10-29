@@ -34,10 +34,18 @@ class Synth {
 
   play(midi: number, durationSec = 1.2, velocity = 0.8): void {
     const ctx = this.ensure();
-    if (!ctx || !this.master) return;
+    if (!ctx) return;
     if (ctx.state === 'suspended') void ctx.resume();
-    const now = ctx.currentTime;
+    this.noteAt(midi, ctx.currentTime, durationSec, velocity);
+  }
+
+  /** Play a note at an absolute audio-clock time (used by the player piano). */
+  noteAt(midi: number, time: number, durationSec = 1.2, velocity = 0.8): void {
+    const ctx = this.ensure();
+    if (!ctx || !this.master) return;
+    const now = Math.max(time, ctx.currentTime);
     const freq = midiToFrequency(midi);
+    durationSec = Math.max(0.15, durationSec);
 
     const env = ctx.createGain();
     env.gain.setValueAtTime(0, now);

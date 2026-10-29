@@ -5,6 +5,7 @@ import { lessonAfter, loadProgress, recordResult, saveProgress, type Progress, t
 import { useMidiInput } from './input/useMidiInput';
 import { applyPreset, configOf, loadSettings, saveSettings, type PresetId, type SessionConfig, type Settings } from './music/difficulty';
 import { LessonIntroScreen } from './screens/LessonIntroScreen';
+import { FreePlayScreen } from './screens/FreePlayScreen';
 import { PracticeScreen } from './screens/PracticeScreen';
 import { ResultsScreen } from './screens/ResultsScreen';
 import { StartScreen, type StartTab } from './screens/StartScreen';
@@ -13,6 +14,7 @@ import { summarize, type SessionResult } from './state/session';
 type Screen =
   | { name: 'start' }
   | { name: 'intro'; lesson: Lesson }
+  | { name: 'play'; pieceId: string | null }
   | { name: 'practice'; run: number; config: SessionConfig; lesson?: Lesson }
   | { name: 'results'; result: SessionResult; lesson?: Lesson; stars?: Stars; improved?: boolean };
 
@@ -77,7 +79,22 @@ export default function App() {
           onStartFree={() => beginSession(configOf(settings))}
           progress={progress}
           onSelectLesson={(lesson) => setScreen({ name: 'intro', lesson })}
+          onFreePlay={(pieceId) => {
+            synth.unlock();
+            setScreen({ name: 'play', pieceId });
+          }}
           midi={midi}
+        />
+      )}
+      {screen.name === 'play' && (
+        <FreePlayScreen
+          initialPieceId={screen.pieceId}
+          keyboardSize={settings.keyboardSize}
+          keyLabels={settings.keyLabels === 'always'}
+          onBack={() => {
+            setTab('play');
+            setScreen({ name: 'start' });
+          }}
         />
       )}
       {screen.name === 'intro' && (

@@ -36,9 +36,14 @@ export interface Prompt {
   key: KeyName;
   timeSignature?: [number, number];
   events: PromptEvent[];
+  /** A second part on the other staff (player piano scores). */
+  secondary?: { clef: Clef; events: PromptEvent[] };
 }
 
-export const DURATION_BEATS: Record<Duration, number> = { w: 4, h: 2, hd: 3, q: 1, '8': 0.5, qr: 1, hr: 2 };
+export const DURATION_BEATS: Record<Duration, number> = {
+  w: 4, wd: 6, h: 2, hd: 3, q: 1, qd: 1.5, '8': 0.5, '8d': 0.75, '16': 0.25,
+  wr: 4, hr: 2, qr: 1, '8r': 0.5, '16r': 0.25,
+};
 
 export function isRest(d: Duration): boolean {
   return d.endsWith('r');

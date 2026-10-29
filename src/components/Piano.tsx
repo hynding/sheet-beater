@@ -12,6 +12,8 @@ interface PianoProps {
   /** Pitches to print a note name on. */
   labelled?: 'all' | ReadonlySet<number>;
   disabled?: boolean;
+  /** When the keyboard scrolls, keep these pitches in view (player piano). */
+  keepVisible?: number[];
 }
 
 const MIN_WHITE_KEY_PX = 28;
@@ -23,7 +25,7 @@ const BLACK_HEIGHT_RATIO = 0.62;
  * container width and the number of keys; if that would make keys too small
  * to tap, the keyboard keeps a minimum key width and scrolls sideways.
  */
-export function Piano({ low, high, onNoteOn, highlights = {}, labelled, disabled = false }: PianoProps) {
+export function Piano({ low, high, onNoteOn, highlights = {}, labelled, disabled = false, keepVisible }: PianoProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { width, height } = useElementSize(scrollRef);
   const [pressed, setPressed] = useState<number | null>(null);
@@ -54,6 +56,19 @@ export function Piano({ low, high, onNoteOn, highlights = {}, labelled, disabled
   }, [overflow, whiteWidth, firstWhite, width, low, high]);
 
   useEffect(() => () => window.clearTimeout(pressedTimer.current), []);
+
+  // Scroll so that the notes being played stay on screen.
+  const keepKey = keepVisible?.join(',') ?? '';
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !overflow || !keepVisible?.length) return;
+    const xs = keepVisible.map((m) => (whiteKeyIndex(m) - firstWhite + 0.5) * whiteWidth);
+    const min = Math.min(...xs) - whiteWidth;
+    const max = Math.max(...xs) + whiteWidth;
+    if (min >= el.scrollLeft && max <= el.scrollLeft + width) return;
+    el.scrollTo({ left: Math.max(0, (min + max) / 2 - width / 2), behavior: 'smooth' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keepKey, overflow, whiteWidth, firstWhite, width]);
 
   const press = (midi: number) => {
     if (disabled) return;

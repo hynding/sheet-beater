@@ -17,6 +17,8 @@ Runs in any modern browser (desktop or mobile, designed for landscape) and ships
 7. Chords: intervals, triads, inversions, in keys
 8. Rhythm: a metronome counts in and a cursor crosses the bar; quarter, half, whole and eighth notes, rests, 3/4 time
 
+**Free play**: an open piano with sound, MIDI and computer-keyboard input, plus a player piano with three public-domain pieces in short simplified arrangements written for the app: The Entertainer (Scott Joplin), the first movement of the Moonlight Sonata (Beethoven) and Canon in D (Pachelbel). *Listen* plays the piece with the keys lit up and the score following along with a cursor; *Play along* waits for you to play each right-hand note while the left hand plays itself. Tempo and looping are adjustable. Pieces are written in a compact text notation in `src/music/pieces.ts`, so adding one is a matter of typing out the bars.
+
 **Free practice**: five presets plus a fully custom mix of exercise type (single notes, phrases, chords, rhythm), staff, ledger lines, accidentals, key signatures, chord shapes, tempo, time signature, note values, session length and a per-note timer.
 
 - Treble, bass or grand staff, rendered with [VexFlow](https://www.vexflow.com/).
@@ -91,13 +93,14 @@ Every time the web code changes, run `npm run cap:sync` before building the nati
 
 ```
 src/
-  music/        pitch helpers, key signatures, session config and presets, prompt generator (unit tested)
+  music/        pitch helpers, key signatures, session config and presets, prompt generator,
+                score notation and the player-piano pieces (unit tested)
   curriculum/   lesson content and progress/stars/unlocking (unit tested)
   state/        input judging (timing, chords) and session summaries (unit tested)
-  audio/        Web Audio synth
+  audio/        Web Audio synth, metronome clicks and the player-piano scheduler
   input/        Web MIDI and computer-keyboard hooks
   components/   Staff (VexFlow) and Piano
-  screens/      Start (Learn path + Free practice), Lesson intro, Practice and Results screens
+  screens/      Start (Learn path, Free practice, Free play), Lesson intro, Practice, Free play and Results screens
 android/        Capacitor Android project (open in Android Studio)
 ios/            Capacitor iOS project (open in Xcode, macOS only)
 assets/         source images for app icons and splash screens

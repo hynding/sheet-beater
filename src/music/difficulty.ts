@@ -5,7 +5,7 @@ export type Clef = 'treble' | 'bass';
 export type AccidentalMode = 'none' | 'sharps' | 'flats' | 'mixed';
 export type SessionMode = 'single' | 'sequence' | 'chord' | 'rhythm';
 /** VexFlow-style durations; a trailing r is a rest, d a dot. */
-export type Duration = 'w' | 'h' | 'hd' | 'q' | '8' | 'qr' | 'hr';
+export type Duration = 'w' | 'wd' | 'h' | 'hd' | 'q' | 'qd' | '8' | '8d' | '16' | 'wr' | 'hr' | 'qr' | '8r' | '16r';
 export type ChordKind = 'interval' | 'triad' | 'inversion';
 export type KeyLabelMode = 'always' | 'onMistake' | 'never';
 export type KeyboardSize = 'small' | 'medium' | 'large';
