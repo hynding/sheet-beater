@@ -101,7 +101,7 @@ function pick<T>(items: readonly T[], rng: Rng): T {
 const NEUTRAL_FOCUS = 1.5;
 
 /**
- * Pick a diatonic index, favouring small melodic moves when `melodic` is set
+ * Pick a diatonic index, favoring small melodic moves when `melodic` is set
  * and, when `weight` is given, positions with a higher weight.
  */
 function pickIndex(pool: number[], rng: Rng, prev: number | undefined, melodic: boolean, weight?: (index: number) => number): number {

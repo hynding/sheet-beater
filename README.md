@@ -19,6 +19,8 @@ Runs in any modern browser (desktop or mobile, designed for landscape) and ships
 
 **Adaptive practice**: the app remembers how well each staff position is read (accuracy and speed, stored on the device). Single-note sessions lean toward the positions you miss, a missed note or chord comes back a few prompts later in the same session, and once there are at least three weak notes the Learn tab offers a "weak spots" session made only of them.
 
+**Progress**: a fourth tab with the current and best daily streak, total practice time, overall accuracy, lessons and stars, a 14-day activity chart and a map of accuracy for every staff position practiced (with a table view). Everything is stored on the device and can be erased from the same tab.
+
 **Free play**: an open piano with sound, MIDI and computer-keyboard input, plus a player piano with three public-domain pieces in short simplified arrangements written for the app: The Entertainer (Scott Joplin), the first movement of the Moonlight Sonata (Beethoven) and Canon in D (Pachelbel). *Listen* plays the piece with the keys lit up and the score following along with a cursor; *Play along* waits for you to play each right-hand note while the left hand plays itself. Tempo and looping are adjustable. Pieces are written in a compact text notation in `src/music/pieces.ts`, so adding one is a matter of typing out the bars.
 
 **Free practice**: five presets plus a fully custom mix of exercise type (single notes, phrases, chords, rhythm), staff, ledger lines, accidentals, key signatures, chord shapes, tempo, time signature, note values, session length and a per-note timer.
