@@ -566,3 +566,10 @@ kbd {
   .freeplay__stage { padding-top: 0.25rem; padding-bottom: 0.1rem; gap: 0.15rem; }
   .freeplay__bar { min-height: 22px; }
 }
+
+/* Microphone input */
+.mic { display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; opacity: 0.6; }
+.mic[aria-pressed='true'] { opacity: 1; color: var(--fg); }
+.mic--listening { color: var(--correct); }
+.mic--denied, .mic--missing, .mic--error, .mic--unsupported { color: var(--wrong); }
+.freeplay__bar .mic { min-height: 22px; padding: 0 0.4rem; font-size: inherit; font-weight: 400; }

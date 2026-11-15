@@ -43,6 +43,8 @@
       </array>
     </dict>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Sheet Beater can listen for the notes you play on a real piano. The sound is analysed on your device and is never recorded or sent anywhere.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

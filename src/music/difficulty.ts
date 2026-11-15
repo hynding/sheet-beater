@@ -56,6 +56,8 @@ export interface Settings extends SessionConfig {
   sound: boolean;
   keyLabels: KeyLabelMode;
   keyboardSize: KeyboardSize;
+  /** Listen through the microphone for notes played on a real piano (experimental). */
+  micInput: boolean;
   /** How tight the beat windows are in rhythm exercises. */
   timingStrictness: 'relaxed' | 'normal' | 'strict';
   /**
@@ -123,6 +125,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sound: true,
   keyLabels: 'onMistake',
   keyboardSize: 'medium',
+  micInput: false,
   timingStrictness: 'normal',
   timingOffsetMs: null,
 };

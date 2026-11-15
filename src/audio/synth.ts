@@ -112,7 +112,9 @@ class Synth {
     if (!ctx || !this.master) return () => undefined;
     const osc = ctx.createOscillator();
     osc.type = 'square';
-    osc.frequency.value = accent ? 1600 : 1100;
+    // Deliberately a quarter tone away from any note, so that microphone
+    // input never mistakes a click from the speaker for a played key.
+    osc.frequency.value = accent ? 1614 : 1077;
     const env = ctx.createGain();
     env.gain.setValueAtTime(0.0001, time);
     env.gain.exponentialRampToValueAtTime(accent ? 0.5 : 0.3, time + 0.002);

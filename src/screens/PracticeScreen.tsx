@@ -3,6 +3,7 @@ import { synth } from '../audio/synth';
 import { Piano, type KeyHighlight } from '../components/Piano';
 import { Staff, type EventState } from '../components/Staff';
 import { useComputerKeyboard } from '../input/useComputerKeyboard';
+import { micLabel, useMicInput } from '../input/useMicInput';
 import { useMidiInput } from '../input/useMidiInput';
 import type { KeyLabelMode, KeyboardSize, SessionConfig } from '../music/difficulty';
 import { eventLabel, generatePrompts, keyboardRangeFor, type Prompt } from '../music/generator';
@@ -19,6 +20,8 @@ export interface PracticeOptions {
   timingStrictness: TimingStrictness;
   /** Calibrated tap lag in ms, or null to use the browser's reported output latency. */
   timingOffsetMs: number | null;
+  /** Listen for an acoustic piano through the microphone. */
+  micInput: boolean;
 }
 
 interface PracticeScreenProps {
@@ -27,6 +30,7 @@ interface PracticeScreenProps {
   title: string;
   onFinish: (result: SessionResult) => void;
   onQuit: () => void;
+  onToggleMic: () => void;
 }
 
 const CORRECT_DELAY_MS = 450;
@@ -57,7 +61,7 @@ interface RhythmClock {
   stops: Array<() => void>;
 }
 
-export function PracticeScreen({ config, options, title, onFinish, onQuit }: PracticeScreenProps) {
+export function PracticeScreen({ config, options, title, onFinish, onQuit, onToggleMic }: PracticeScreenProps) {
   // State rather than a memo: missed prompts are re-queued a little later in the session.
   const [prompts, setPrompts] = useState<Prompt[]>(() => generatePrompts(config));
   const range = useMemo(() => keyboardRangeFor(config), [config]);
@@ -85,6 +89,8 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
   const finished = index >= prompts.length;
   const isRhythm = config.mode === 'rhythm';
   const windows = TIMING_WINDOWS[options.timingStrictness];
+  // With the microphone on the app keeps quiet (apart from the metronome), or it would hear itself.
+  const sound = options.sound && !options.micInput;
 
   const setPhaseBoth = (p: Phase) => {
     phaseRef.current = p;
@@ -205,7 +211,7 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
       target.forEach((m) => next.add(m));
       return next;
     });
-    if (options.sound) later(() => target.forEach((m) => synth.play(m)), played.length ? 400 : 250);
+    if (sound) later(() => target.forEach((m) => synth.play(m)), played.length ? 400 : 250);
   };
 
   /** Non-rhythm: move to the next event in the phrase, or the next prompt. */
@@ -228,8 +234,8 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
   };
 
   const handleNoteOn = useCallback(
-    (midi: number) => {
-      if (options.sound) synth.play(midi);
+    (midi: number, inputDelayMs = 0) => {
+      if (sound) synth.play(midi);
       const p = prompts[index];
       if (!p) return;
       const phaseNow = phaseRef.current;
@@ -237,7 +243,8 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
       if (isRhythm) {
         const c = clock.current;
         if (!c || (phaseNow !== 'playing' && phaseNow !== 'countIn')) return;
-        const now = synth.now() - c.lag;
+        // Microphone notes are reported a moment after they were struck.
+        const now = synth.now() - c.lag - inputDelayMs / 1000;
         // The screen flips from count-in to playing on an animation frame, so a
         // first note played on or just ahead of the beat arrives during the
         // count-in. Accept it once it is within reach of the bar; anything
@@ -308,7 +315,7 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
       stepOn(p, ei, correct ? (p.events.length === 1 ? CORRECT_DELAY_MS : 120) : WRONG_DELAY_MS);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [prompts, index, isRhythm, options.sound, record, queueRetry],
+    [prompts, index, isRhythm, sound, record, queueRetry],
   );
 
   /** Per-event time limit (non-rhythm modes). */
@@ -321,7 +328,7 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
       record(prompt, ei, [], false, 'none');
       setPhaseBoth('feedback');
       setStates((s) => s.map((v, i) => (i === ei ? 'wrong' : v)));
-      if (options.sound) synth.thud();
+      if (sound) synth.thud();
       showAnswer(prompt, ei, []);
       setToast({ kind: 'wrong', text: `Time's up. That was ${eventLabel(e)}.` });
       queueRetry(prompt);
@@ -344,7 +351,8 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
   );
 
   useMidiInput((midi) => handleNoteOn(midi));
-  const { baseMidi } = useComputerKeyboard(handleNoteOn);
+  const { baseMidi } = useComputerKeyboard((midi) => handleNoteOn(midi));
+  const mic = useMicInput(handleNoteOn, options.micInput, range);
 
   const labelled = options.keyLabels === 'always' ? 'all' : options.keyLabels === 'onMistake' ? mistakeKeys : undefined;
   const correctCount = answers.current.filter((a) => a.correct).length;
@@ -401,6 +409,10 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
           </div>
         )}
         <span className="hud__hint muted small">Keys from {midiToName(baseMidi)}</span>
+        <button type="button" className={`btn btn--ghost mic mic--${mic.state}`} onClick={onToggleMic} aria-pressed={options.micInput} aria-label="Microphone input" title="Listen for a real piano through the microphone">
+          <span aria-hidden="true">🎤</span>
+          {options.micInput && <span className="mic__note small">{micLabel(mic, (m) => midiToName(m))}</span>}
+        </button>
         {canFullscreen && (
           <button type="button" className="btn btn--ghost" onClick={toggleFullscreen} aria-label="Toggle fullscreen">
             ⛶
@@ -419,7 +431,7 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
       </div>
 
       <div className="practice__piano" style={{ flexBasis: KEYBOARD_HEIGHT[options.keyboardSize] }}>
-        <Piano low={range.low} high={range.high} onNoteOn={handleNoteOn} highlights={highlights} labelled={labelled} disabled={!prompt || phase === 'feedback'} />
+        <Piano low={range.low} high={range.high} onNoteOn={(midi) => handleNoteOn(midi)} highlights={mic.note !== null && highlights[mic.note] === undefined ? { ...highlights, [mic.note]: 'pressed' } : highlights} labelled={labelled} disabled={!prompt || phase === 'feedback'} />
       </div>
     </div>
   );

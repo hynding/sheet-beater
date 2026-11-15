@@ -23,13 +23,15 @@ Runs in any modern browser (desktop or mobile, designed for landscape) and ships
 
 **Rhythm timing**: rhythm exercises judge each note against what the player hears, not what was scheduled. The app subtracts the audio output delay the browser reports, or a personal value from a twelve-click tap-along calibration (Free practice options, rhythm lesson cards and the results screen all link to it). Strictness is selectable (relaxed, normal, strict), a press is matched to the nearest note so a late note is scored as late rather than as early for the next one, and a first note played right on the downbeat is never dropped.
 
+**Microphone input (experimental)**: with the 🎤 button on, the app listens for notes played on an acoustic piano and treats them as key presses in lessons, free practice and play-along. Pitch is detected on the device with the YIN method and nothing is recorded or sent anywhere. It hears one note at a time, so chords have to be rolled and heavy pedal confuses it. While the microphone is on the app stays silent apart from the metronome, whose clicks are tuned between semitones so they are never mistaken for a note. The browser version needs HTTPS and a one-time permission; the native projects declare the microphone permission (Android `RECORD_AUDIO`, iOS `NSMicrophoneUsageDescription`), which the store listings' privacy sections must mention. It has been verified with synthesized piano tones through the browser's microphone path, not yet on physical phones or a real instrument.
+
 **Free play**: an open piano with sound, MIDI and computer-keyboard input, plus a player piano with three public-domain pieces in short simplified arrangements written for the app: The Entertainer (Scott Joplin), the first movement of the Moonlight Sonata (Beethoven) and Canon in D (Pachelbel). *Listen* plays the piece with the keys lit up and the score following along with a cursor; *Play along* waits for you to play each note of the hand you choose (right, left or both) while the app plays the rest. The next bar is always shown beside the current one for reading ahead, a seek bar jumps to any bar while stopped or playing, and tempo and looping are adjustable. Pieces are written in a compact text notation in `src/music/pieces.ts`, so adding one is a matter of typing out the bars.
 
 **Free practice**: five presets plus a fully custom mix of exercise type (single notes, phrases, chords, rhythm), staff, ledger lines, accidentals, key signatures, chord shapes, tempo, time signature, note values, session length and a per-note timer.
 
 - Treble, bass or grand staff, rendered with [VexFlow](https://www.vexflow.com/).
 - On-screen piano that scales to the screen. Key width follows the note range of the session; the keyboard height is a start-screen setting (small, medium, large). If keys would get too small to tap, the keyboard keeps a minimum key size and scrolls sideways.
-- Three ways to play: tap the on-screen keys, use the computer keyboard (`A`–`K` white keys, `W E T Y U` black keys, `Z`/`X` shift octave) or plug in a MIDI keyboard (Web MIDI, Chrome and Edge).
+- Four ways to play: tap the on-screen keys, use the computer keyboard (`A`–`K` white keys, `W E T Y U` black keys, `Z`/`X` shift octave), plug in a MIDI keyboard (Web MIDI, Chrome and Edge), or play a real piano near the microphone.
 - Built-in synth so every key you press is heard; after a mistake the correct note is played and highlighted.
 - Key names on the piano: always, never, or only on keys you have missed.
 - Results screen with accuracy, response times (or on-the-beat precision for rhythm), best streak, weakest notes, every miss, stars earned and a one-tap "next lesson" or "try the next level".
@@ -95,7 +97,7 @@ Every time the web code changes, run `npm run cap:sync` before building the nati
 
 ### What differs from the browser version
 
-- Web MIDI is not available inside the native WebView, so MIDI keyboards only work in Chrome and Edge on desktop. A native MIDI plugin would be needed for mobile MIDI support.
+- Web MIDI is not available inside the native WebView, so MIDI keyboards only work in Chrome and Edge on desktop. A native MIDI plugin would be needed for mobile MIDI support. Microphone input is the way to use a real instrument on phones and tablets.
 - The service worker is only registered in the browser; the native shell ships its own copy of the web build.
 - `.github/workflows/mobile.yml` builds a debug APK on Ubuntu and an unsigned simulator build on macOS for every push, so both native projects are checked continuously. Release signing is deliberately left out of CI.
 
@@ -107,8 +109,8 @@ src/
                 score notation and the player-piano pieces (unit tested)
   curriculum/   lesson content and progress/stars/unlocking (unit tested)
   state/        input judging (timing, chords), session summaries, per-note mastery and retry scheduling (unit tested)
-  audio/        Web Audio synth, metronome clicks and the player-piano scheduler
-  input/        Web MIDI and computer-keyboard hooks
+  audio/        Web Audio synth, metronome clicks, the player-piano scheduler and pitch detection (unit tested)
+  input/        Web MIDI, computer-keyboard and microphone hooks
   components/   Staff (VexFlow) and Piano
   screens/      Start (Learn path, Free practice, Free play), Lesson intro, Practice, Free play and Results screens
 android/        Capacitor Android project (open in Android Studio)
