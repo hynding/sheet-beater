@@ -47,7 +47,7 @@ export function ResultsScreen({ result, lesson, stars, improved, nextLesson, pre
         ? 'Great work'
         : pct >= 70
           ? 'Good progress'
-          : 'Keep practising';
+          : 'Keep practicing';
   const unitLabel = result.config.mode === 'chord' ? 'chords' : result.config.mode === 'rhythm' ? 'notes in time' : 'notes';
   const timed = s.timing.perfect + s.timing.good + s.timing.early + s.timing.late + s.timing.miss;
 

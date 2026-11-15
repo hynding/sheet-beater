@@ -10,7 +10,7 @@ export function scheduleRetry(prompts: Prompt[], index: number, maxRetries: numb
   if (!missed || missed.retryOf !== undefined) return prompts;
   if (prompts.filter((p) => p.retryOf !== undefined).length >= maxRetries) return prompts;
   const nextId = prompts.reduce((max, p) => Math.max(max, p.id), -1) + 1;
-  // Slide past neighbours that ask for the same thing, so the retry is not a back-to-back repeat.
+  // Slide past neighbors that ask for the same thing, so the retry is not a back-to-back repeat.
   const same = (p: Prompt | undefined) => !!p && p.clef === missed.clef && sameNotes(p, missed);
   let at = Math.min(prompts.length, index + 1 + gap);
   while (at < prompts.length && (same(prompts[at - 1]) || same(prompts[at]))) at++;

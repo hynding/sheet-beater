@@ -22,7 +22,7 @@ describe('scheduleRetry', () => {
     expect(prompts).toHaveLength(6); // input untouched
   });
 
-  it('slides past a neighbour that asks for the same note', () => {
+  it('slides past a neighbor that asks for the same note', () => {
     const [a, b, c, d] = prompts;
     const list = [a, b, c, { ...a, id: 50 }, d]; // the missed note happens to come up again at index 3
     const next = scheduleRetry(list, 0, 3);

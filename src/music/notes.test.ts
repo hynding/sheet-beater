@@ -22,7 +22,7 @@ describe('notes', () => {
     }
   });
 
-  it('spells middle C and its neighbours', () => {
+  it('spells middle C and its neighbors', () => {
     expect(midiToSpelling(60)).toEqual({ letter: 'C', accidental: '', octave: 4 });
     expect(midiToSpelling(61)).toEqual({ letter: 'C', accidental: '#', octave: 4 });
     expect(midiToSpelling(61, 'flat')).toEqual({ letter: 'D', accidental: 'b', octave: 4 });

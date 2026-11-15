@@ -21,10 +21,12 @@ import { keyboardRangeFor } from '../music/generator';
 import { KEY_NAMES, type KeyName } from '../music/keys';
 import { midiToName } from '../music/notes';
 import { PIECES } from '../music/pieces';
-import type { WeakNote } from '../state/mastery';
+import { streaks, type History } from '../state/history';
+import type { Mastery, WeakNote } from '../state/mastery';
 import { LearnPath } from './LearnPath';
+import { ProgressPanel } from './ProgressPanel';
 
-export type StartTab = 'learn' | 'free' | 'play';
+export type StartTab = 'learn' | 'free' | 'play' | 'progress';
 
 interface StartScreenProps {
   tab: StartTab;
@@ -37,6 +39,9 @@ interface StartScreenProps {
   weakNotes: WeakNote[];
   onPracticeWeak: () => void;
   onFreePlay: (pieceId: string | null) => void;
+  history: History;
+  mastery: Mastery;
+  onResetProgress: () => void;
   midi: MidiStatus;
 }
 
@@ -49,12 +54,14 @@ function toggle<T>(list: T[], item: T, min = 1): T[] {
   return [...list, item];
 }
 
-export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progress, onSelectLesson, weakNotes, onPracticeWeak, onFreePlay, midi }: StartScreenProps) {
+export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progress, onSelectLesson, weakNotes, onPracticeWeak, onFreePlay, history, mastery, onResetProgress, midi }: StartScreenProps) {
   const [showCustom, setShowCustom] = useState(settings.preset === 'custom');
   const range = keyboardRangeFor(settings);
   const activePreset = PRESETS.find((p) => p.id === settings.preset);
   const next = nextLesson(progress);
   const starred = LESSONS.filter((l) => (progress[l.id]?.stars ?? 0) > 0).length;
+  const streak = streaks(history);
+  const streakNote = streak.current > 0 ? `${streak.current}-day streak · ` : '';
 
   const update = (patch: Partial<Settings>) => {
     const nextSettings = { ...settings, ...patch };
@@ -75,13 +82,26 @@ export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progr
           <button type="button" className={`tab${tab === 'play' ? ' tab--active' : ''}`} onClick={() => onTab('play')}>
             Free play
           </button>
+          <button type="button" className={`tab${tab === 'progress' ? ' tab--active' : ''}`} onClick={() => onTab('progress')}>
+            Progress
+          </button>
         </nav>
         <span className="muted small start__status">
-          {tab === 'learn' ? `${starred} of ${LESSONS.length} lessons passed` : tab === 'play' ? 'Play anything, or let the player piano show you.' : 'Read the note, play the key.'}
+          {tab === 'learn'
+            ? `${streakNote}${starred} of ${LESSONS.length} lessons passed`
+            : tab === 'play'
+              ? 'Play anything, or let the player piano show you.'
+              : tab === 'progress'
+                ? 'Saved on this device.'
+                : 'Read the note, play the key.'}
         </span>
       </header>
 
-      {tab === 'play' ? (
+      {tab === 'progress' ? (
+        <section className="start__body start__body--path">
+          <ProgressPanel history={history} mastery={mastery} progress={progress} onReset={onResetProgress} />
+        </section>
+      ) : tab === 'play' ? (
         <>
           <section className="start__body start__body--path">
             <div className="pieces">

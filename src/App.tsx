@@ -9,6 +9,7 @@ import { FreePlayScreen } from './screens/FreePlayScreen';
 import { PracticeScreen } from './screens/PracticeScreen';
 import { ResultsScreen } from './screens/ResultsScreen';
 import { StartScreen, type StartTab } from './screens/StartScreen';
+import { addSession, loadHistory, saveHistory, type History } from './state/history';
 import { focusWeights, loadMastery, recordAnswers, saveMastery, weakNotes, weakSpotConfig, type Mastery } from './state/mastery';
 import { summarize, type SessionResult } from './state/session';
 
@@ -28,6 +29,7 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [progress, setProgress] = useState<Progress>(loadProgress);
   const [mastery, setMastery] = useState<Mastery>(loadMastery);
+  const [history, setHistory] = useState<History>(loadHistory);
   const [tab, setTab] = useState<StartTab>('learn');
   const [screen, setScreen] = useState<Screen>({ name: 'start' });
   const [portrait, setPortrait] = useState(false);
@@ -36,6 +38,7 @@ export default function App() {
   useEffect(() => saveSettings(settings), [settings]);
   useEffect(() => saveProgress(progress), [progress]);
   useEffect(() => saveMastery(mastery), [mastery]);
+  useEffect(() => saveHistory(history), [history]);
 
   useEffect(() => {
     const mq = window.matchMedia('(orientation: portrait) and (max-width: 900px)');
@@ -60,6 +63,7 @@ export default function App() {
   const finishSession = useCallback(
     (result: SessionResult, source: Source, lesson?: Lesson) => {
       setMastery((m) => recordAnswers(m, result.answers));
+      setHistory((h) => addSession(h, result, source, lesson?.id));
       if (!lesson) {
         setScreen({ name: 'results', result, source });
         return;
@@ -79,6 +83,12 @@ export default function App() {
     },
     [settings, beginSession],
   );
+
+  const resetProgress = useCallback(() => {
+    setProgress({});
+    setMastery({});
+    setHistory([]);
+  }, []);
 
   const weak = weakNotes(mastery);
   const startWeakSpots = useCallback(() => {
@@ -100,6 +110,9 @@ export default function App() {
           onStartFree={() => beginSession(configOf(settings), 'free')}
           weakNotes={weak}
           onPracticeWeak={startWeakSpots}
+          history={history}
+          mastery={mastery}
+          onResetProgress={resetProgress}
           progress={progress}
           onSelectLesson={(lesson) => setScreen({ name: 'intro', lesson })}
           onFreePlay={(pieceId) => {
