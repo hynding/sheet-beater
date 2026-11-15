@@ -15,6 +15,7 @@ interface ResultsScreenProps {
   improved?: boolean;
   nextLesson?: Lesson;
   presetId?: PresetId | 'custom';
+  backLabel: string;
   onPlayAgain: () => void;
   onNext?: () => void;
   onLevelUp?: (preset: PresetId) => void;
@@ -25,7 +26,7 @@ function formatSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)} s`;
 }
 
-export function ResultsScreen({ result, lesson, stars, improved, nextLesson, presetId, onPlayAgain, onNext, onLevelUp, onBack }: ResultsScreenProps) {
+export function ResultsScreen({ result, lesson, stars, improved, nextLesson, presetId, backLabel, onPlayAgain, onNext, onLevelUp, onBack }: ResultsScreenProps) {
   const s = useMemo(() => summarize(result), [result]);
   const pct = Math.round(s.accuracy * 100);
   const isRhythm = result.config.mode === 'rhythm';
@@ -125,6 +126,7 @@ export function ResultsScreen({ result, lesson, stars, improved, nextLesson, pre
               ))}
             </ul>
           )}
+          {weakNotes.length > 0 && !isRhythm && <p className="muted small">These will come up more often until they stick.</p>}
           {s.missed.length > 0 && (
             <details className="details">
               <summary>Every miss</summary>
@@ -144,7 +146,7 @@ export function ResultsScreen({ result, lesson, stars, improved, nextLesson, pre
 
       <footer className="results__footer">
         <button type="button" className="btn" onClick={onBack}>
-          {lesson ? 'Back to path' : 'Change settings'}
+          {backLabel}
         </button>
         <button type="button" className={`btn${lesson && stars === 0 ? ' btn--primary' : ''}`} onClick={onPlayAgain}>
           {lesson ? 'Retry' : 'Play again'}

@@ -9,6 +9,7 @@ import { eventLabel, generatePrompts, keyboardRangeFor, type Prompt } from '../m
 import { describeKey } from '../music/keys';
 import { midiToName } from '../music/notes';
 import { TIMING, chordProgress, isOnTime, judgeTiming, type Timing } from '../state/judge';
+import { retryBudget, scheduleRetry } from '../state/retry';
 import type { Answer, SessionResult } from '../state/session';
 
 export interface PracticeOptions {
@@ -48,7 +49,8 @@ interface RhythmClock {
 }
 
 export function PracticeScreen({ config, options, title, onFinish, onQuit }: PracticeScreenProps) {
-  const prompts = useMemo(() => generatePrompts(config), [config]);
+  // State rather than a memo: missed prompts are re-queued a little later in the session.
+  const [prompts, setPrompts] = useState<Prompt[]>(() => generatePrompts(config));
   const range = useMemo(() => keyboardRangeFor(config), [config]);
   const [index, setIndex] = useState(0);
   const [eventIndex, setEventIndex] = useState(0);
@@ -89,6 +91,15 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
   const finish = useCallback(() => {
     onFinish({ config, answers: answers.current, startedAt: startedAt.current, endedAt: Date.now() });
   }, [onFinish, config]);
+
+  /** Bring a missed single note or chord back a few prompts later. */
+  const queueRetry = useCallback(
+    (p: Prompt) => {
+      if (p.mode !== 'single' && p.mode !== 'chord') return;
+      setPrompts((list) => scheduleRetry(list, list.indexOf(p), retryBudget(config.noteCount)));
+    },
+    [config.noteCount],
+  );
 
   const advancePrompt = useCallback(() => {
     setToast(null);
@@ -254,6 +265,7 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
         } else {
           showAnswer(p, ei, pressed.current);
           setToast({ kind: 'wrong', text: `That was ${eventLabel(e)}.` });
+          queueRetry(p);
         }
         stepOn(p, ei, correct ? CORRECT_DELAY_MS : WRONG_DELAY_MS);
         return;
@@ -269,11 +281,12 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
       } else {
         showAnswer(p, ei, [midi]);
         setToast({ kind: 'wrong', text: `That was ${eventLabel(e)}, you played ${midiToName(midi)}.` });
+        queueRetry(p);
       }
       stepOn(p, ei, correct ? (p.events.length === 1 ? CORRECT_DELAY_MS : 120) : WRONG_DELAY_MS);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [prompts, index, isRhythm, options.sound, record],
+    [prompts, index, isRhythm, options.sound, record, queueRetry],
   );
 
   /** Per-event time limit (non-rhythm modes). */
@@ -289,6 +302,7 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
       if (options.sound) synth.thud();
       showAnswer(prompt, ei, []);
       setToast({ kind: 'wrong', text: `Time's up. That was ${eventLabel(e)}.` });
+      queueRetry(prompt);
       stepOn(prompt, ei, WRONG_DELAY_MS);
     }, config.timeLimitMs);
     return () => window.clearTimeout(id);
@@ -320,8 +334,9 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
   };
   const beatsPerBar = clock.current?.beatsPerBar ?? (config.timeSignature[0] * 4) / config.timeSignature[1];
   const activeBeat = countIn !== null ? countIn - 1 : beat !== null ? Math.floor(beat) : -1;
-  const instruction =
+  const baseInstruction =
     prompt?.mode === 'chord' ? 'Play every note of the chord' : prompt?.mode === 'sequence' ? 'Play the blue note' : prompt?.mode === 'rhythm' ? (countIn !== null ? 'Count in' : phase === 'playing' ? 'Play' : '') : '';
+  const instruction = prompt?.retryOf !== undefined ? ['You missed this one earlier: try it again', baseInstruction].filter(Boolean).join(' · ') : baseInstruction;
 
   return (
     <div className="screen practice">

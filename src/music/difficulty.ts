@@ -27,6 +27,11 @@ export interface SessionConfig {
   innerLedgerLines: number;
   /** When set, replaces the ledger-line based range with explicit notes. */
   notePool?: NotePool[];
+  /**
+   * Relative chance of each staff position being asked in single-note mode,
+   * keyed "treble:F4". Positions without an entry use a neutral weight.
+   */
+  focus?: Record<string, number>;
   accidentals: AccidentalMode;
   /** Probability (0-1) that a note gets an accidental when accidentals are enabled. */
   accidentalChance: number;

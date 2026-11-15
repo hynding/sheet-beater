@@ -21,6 +21,7 @@ import { keyboardRangeFor } from '../music/generator';
 import { KEY_NAMES, type KeyName } from '../music/keys';
 import { midiToName } from '../music/notes';
 import { PIECES } from '../music/pieces';
+import type { WeakNote } from '../state/mastery';
 import { LearnPath } from './LearnPath';
 
 export type StartTab = 'learn' | 'free' | 'play';
@@ -33,6 +34,8 @@ interface StartScreenProps {
   onStartFree: () => void;
   progress: Progress;
   onSelectLesson: (lesson: Lesson) => void;
+  weakNotes: WeakNote[];
+  onPracticeWeak: () => void;
   onFreePlay: (pieceId: string | null) => void;
   midi: MidiStatus;
 }
@@ -46,7 +49,7 @@ function toggle<T>(list: T[], item: T, min = 1): T[] {
   return [...list, item];
 }
 
-export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progress, onSelectLesson, onFreePlay, midi }: StartScreenProps) {
+export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progress, onSelectLesson, weakNotes, onPracticeWeak, onFreePlay, midi }: StartScreenProps) {
   const [showCustom, setShowCustom] = useState(settings.preset === 'custom');
   const range = keyboardRangeFor(settings);
   const activePreset = PRESETS.find((p) => p.id === settings.preset);
@@ -110,6 +113,21 @@ export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progr
       ) : tab === 'learn' ? (
         <>
           <section className="start__body start__body--path">
+            {weakNotes.length >= 3 && (
+              <button type="button" className="weak" onClick={onPracticeWeak}>
+                <span className="weak__text">
+                  <span className="weak__title">Practice your weak spots</span>
+                  <span className="muted small">
+                    {weakNotes
+                      .slice(0, 5)
+                      .map((w) => `${w.name} (${w.clef})`)
+                      .join(', ')}
+                    {weakNotes.length > 5 ? ` and ${weakNotes.length - 5} more` : ''}
+                  </span>
+                </span>
+                <span className="weak__go">Start →</span>
+              </button>
+            )}
             <LearnPath progress={progress} onSelect={onSelectLesson} />
           </section>
           <footer className="start__footer">
