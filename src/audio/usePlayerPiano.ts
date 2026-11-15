@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { buildTimeline, totalBeats, type Piece, type Step } from '../music/score';
+import { buildTimeline, splitStep, stepIndexAt, totalBeats, type Piece, type PlayerHands, type Step } from '../music/score';
 import { synth } from './synth';
 
 export type PlayerMode = 'listen' | 'wait';
@@ -22,6 +22,8 @@ export interface PlayerControls {
   play: () => void;
   pause: () => void;
   stop: () => void;
+  /** Jump to the start of a bar (0-based), whether playing or not. */
+  seek: (bar: number) => void;
   /** Feed a key press; returns true when it completed the waited-for step. */
   notePressed: (midi: number) => boolean;
 }
@@ -31,10 +33,10 @@ const TICK_MS = 30;
 
 /**
  * Drives playback of a piece. Listen mode schedules notes on the audio clock
- * a little ahead of time; wait mode advances one step at a time as the
- * right-hand notes are played by the user while the left hand plays itself.
+ * a little ahead of time; wait mode advances one step at a time as the player
+ * supplies the notes of the chosen hand (or both) and the app plays the rest.
  */
-export function usePlayerPiano(piece: Piece | null, mode: PlayerMode, tempoFactor: number, loop: boolean): [PlayerState, PlayerControls] {
+export function usePlayerPiano(piece: Piece | null, mode: PlayerMode, tempoFactor: number, loop: boolean, hands: PlayerHands = 'right'): [PlayerState, PlayerControls] {
   const steps = useMemo(() => (piece ? buildTimeline(piece) : []), [piece]);
   const total = piece ? totalBeats(piece) : 0;
   const secondsPerBeat = piece ? 60 / (piece.tempo * tempoFactor) : 1;
@@ -55,12 +57,10 @@ export function usePlayerPiano(piece: Piece | null, mode: PlayerMode, tempoFacto
   modeRef.current = mode;
   const loopRef = useRef(loop);
   loopRef.current = loop;
+  const handsRef = useRef(hands);
+  handsRef.current = hands;
 
-  const stepAtBeat = useCallback((beat: number) => {
-    let i = 0;
-    while (i < steps.length && steps[i].beat < beat - 1e-9) i++;
-    return i;
-  }, [steps]);
+  const stepAtBeat = useCallback((beat: number) => stepIndexAt(steps, beat), [steps]);
 
   const clearTimers = () => {
     window.clearInterval(timer.current);
@@ -125,14 +125,16 @@ export function usePlayerPiano(piece: Piece | null, mode: PlayerMode, tempoFacto
     }
     const step = steps[i];
     pressed.current = new Set();
-    if (step.treble.length === 0) {
-      soundStep(step, synth.now(), ['bass']);
+    const { want, auto } = splitStep(step, handsRef.current);
+    if (want.length === 0) {
+      // Nothing here for the player's hand: the app plays it and moves on in time.
+      soundStep(step, synth.now(), auto);
       publish(step.beat, { expected: [] });
       waitStep.current = i + 1;
       waitTimer.current = window.setTimeout(presentWaitStep, step.gap * secondsPerBeat * 1000);
       return;
     }
-    publish(step.beat, { expected: step.treble.map((n) => n.midi) });
+    publish(step.beat, { expected: want });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [steps, secondsPerBeat, soundStep, publish, stopInternal]);
 
@@ -197,11 +199,11 @@ export function usePlayerPiano(piece: Piece | null, mode: PlayerMode, tempoFacto
       if (!playing.current || modeRef.current !== 'wait') return false;
       const step = steps[waitStep.current];
       if (!step) return false;
-      const want = step.treble.map((n) => n.midi);
+      const { want, auto } = splitStep(step, handsRef.current);
       if (!want.includes(midi)) return false;
       pressed.current.add(midi);
       if (!want.every((m) => pressed.current.has(m))) return false;
-      soundStep(step, synth.now(), ['bass']);
+      soundStep(step, synth.now(), auto);
       waitStep.current += 1;
       position.current = steps[waitStep.current]?.beat ?? total;
       presentWaitStep();
@@ -210,11 +212,35 @@ export function usePlayerPiano(piece: Piece | null, mode: PlayerMode, tempoFacto
     [steps, soundStep, presentWaitStep, total],
   );
 
-  // Changing piece, mode or tempo restarts from the top.
+  const seek = useCallback(
+    (bar: number) => {
+      if (!piece) return;
+      const target = Math.max(0, Math.min(piece.bars.length - 1, Math.round(bar))) * piece.barBeats;
+      position.current = target;
+      sounding.current = [];
+      if (!playing.current) {
+        publish(target, { finished: false, expected: [] });
+        return;
+      }
+      if (modeRef.current === 'wait') {
+        waitStep.current = stepAtBeat(target);
+        presentWaitStep();
+        return;
+      }
+      // Listen mode: re-anchor the clock; the scheduler and cursor pick it up on their next tick.
+      startBeat.current = target;
+      startTime.current = synth.now() + 0.05;
+      nextStep.current = stepAtBeat(target);
+      publish(target);
+    },
+    [piece, publish, stepAtBeat, presentWaitStep],
+  );
+
+  // Changing piece, mode, tempo or hands restarts from the top.
   useEffect(() => {
     stopInternal(false);
     return () => clearTimers();
-  }, [piece, mode, tempoFactor, stopInternal]);
+  }, [piece, mode, tempoFactor, hands, stopInternal]);
 
-  return [state, { play, pause, stop, notePressed }];
+  return [state, { play, pause, stop, seek, notePressed }];
 }
