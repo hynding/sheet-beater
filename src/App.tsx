@@ -5,6 +5,7 @@ import { lessonAfter, loadProgress, recordResult, saveProgress, type Progress, t
 import { useMidiInput } from './input/useMidiInput';
 import { applyPreset, configOf, loadSettings, saveSettings, type PresetId, type SessionConfig, type Settings } from './music/difficulty';
 import { LessonIntroScreen } from './screens/LessonIntroScreen';
+import { CalibrationDialog } from './screens/CalibrationDialog';
 import { FreePlayScreen } from './screens/FreePlayScreen';
 import { PracticeScreen } from './screens/PracticeScreen';
 import { ResultsScreen } from './screens/ResultsScreen';
@@ -33,6 +34,7 @@ export default function App() {
   const [tab, setTab] = useState<StartTab>('learn');
   const [screen, setScreen] = useState<Screen>({ name: 'start' });
   const [portrait, setPortrait] = useState(false);
+  const [calibrating, setCalibrating] = useState(false);
   const midi = useMidiInput(() => undefined, screen.name === 'start');
 
   useEffect(() => saveSettings(settings), [settings]);
@@ -96,7 +98,13 @@ export default function App() {
     if (config) beginSession(config, 'weak');
   }, [mastery, beginSession]);
 
-  const options = { sound: settings.sound, keyLabels: settings.keyLabels, keyboardSize: settings.keyboardSize };
+  const options = {
+    sound: settings.sound,
+    keyLabels: settings.keyLabels,
+    keyboardSize: settings.keyboardSize,
+    timingStrictness: settings.timingStrictness,
+    timingOffsetMs: settings.timingOffsetMs,
+  };
 
   return (
     <div className="app">
@@ -113,6 +121,7 @@ export default function App() {
           history={history}
           mastery={mastery}
           onResetProgress={resetProgress}
+          onCalibrate={() => setCalibrating(true)}
           progress={progress}
           onSelectLesson={(lesson) => setScreen({ name: 'intro', lesson })}
           onFreePlay={(pieceId) => {
@@ -134,7 +143,7 @@ export default function App() {
         />
       )}
       {screen.name === 'intro' && (
-        <LessonIntroScreen lesson={screen.lesson} progress={progress} onStart={() => beginSession(screen.lesson.config, 'lesson', screen.lesson)} onBack={() => setScreen({ name: 'start' })} />
+        <LessonIntroScreen lesson={screen.lesson} progress={progress} onStart={() => beginSession(screen.lesson.config, 'lesson', screen.lesson)} onBack={() => setScreen({ name: 'start' })} onCalibrate={() => setCalibrating(true)} />
       )}
       {screen.name === 'practice' && (
         <PracticeScreen
@@ -166,10 +175,21 @@ export default function App() {
             if (next) setScreen({ name: 'intro', lesson: next });
           }}
           onLevelUp={levelUp}
+          onCalibrate={() => setCalibrating(true)}
           onBack={() => {
             setTab(screen.source === 'free' ? 'free' : 'learn');
             setScreen({ name: 'start' });
           }}
+        />
+      )}
+      {calibrating && (
+        <CalibrationDialog
+          current={settings.timingOffsetMs}
+          onSave={(timingOffsetMs) => {
+            setSettings((prev) => ({ ...prev, timingOffsetMs }));
+            setCalibrating(false);
+          }}
+          onClose={() => setCalibrating(false)}
         />
       )}
     </div>

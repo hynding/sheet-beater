@@ -56,6 +56,13 @@ export interface Settings extends SessionConfig {
   sound: boolean;
   keyLabels: KeyLabelMode;
   keyboardSize: KeyboardSize;
+  /** How tight the beat windows are in rhythm exercises. */
+  timingStrictness: 'relaxed' | 'normal' | 'strict';
+  /**
+   * Milliseconds the player's taps trail the scheduled beat on this device,
+   * from the tap-along calibration. Null means "use what the browser reports".
+   */
+  timingOffsetMs: number | null;
 }
 
 export const BASE_CONFIG: SessionConfig = {
@@ -116,6 +123,8 @@ export const DEFAULT_SETTINGS: Settings = {
   sound: true,
   keyLabels: 'onMistake',
   keyboardSize: 'medium',
+  timingStrictness: 'normal',
+  timingOffsetMs: null,
 };
 
 const CONFIG_KEYS = Object.keys(BASE_CONFIG) as Array<keyof SessionConfig>;

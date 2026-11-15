@@ -516,3 +516,26 @@ kbd {
 @media (max-width: 1000px) {
   .start__status { display: none; }
 }
+
+/* Dialog and calibration */
+.dialog__backdrop {
+  position: fixed; inset: 0; z-index: 50; background: rgba(5, 6, 10, 0.72);
+  display: grid; place-items: center; padding: 1rem calc(1rem + var(--safe-right)) 1rem calc(1rem + var(--safe-left));
+}
+.dialog {
+  width: min(560px, 100%); max-height: 100%; overflow-y: auto; background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.7rem;
+}
+.dialog__title { font-size: 1.15rem; }
+.dialog__status { min-height: 1.3em; }
+.dialog__actions { display: flex; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; }
+.tap-pad {
+  appearance: none; font: inherit; font-weight: 700; color: var(--muted); cursor: pointer; touch-action: none;
+  min-height: 84px; border-radius: var(--radius); border: 2px dashed var(--line); background: var(--bg-elev-2);
+}
+.tap-pad--live { border-style: solid; border-color: var(--primary); color: var(--fg); background: #1f2a4d; }
+.tap-pad--live:active { background: var(--primary); }
+.btn--field { min-height: 40px; padding: 0.35rem 0.8rem; align-self: flex-start; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.link { appearance: none; background: none; border: none; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
+.intro__footer { gap: 0.6rem; }
