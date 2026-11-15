@@ -36,6 +36,8 @@ export interface Prompt {
   key: KeyName;
   timeSignature?: [number, number];
   events: PromptEvent[];
+  /** Set on a prompt that repeats an earlier, missed prompt: the id of the original. */
+  retryOf?: number;
   /** A second part on the other staff (player piano scores). */
   secondary?: { clef: Clef; events: PromptEvent[] };
 }
@@ -95,14 +97,27 @@ function pick<T>(items: readonly T[], rng: Rng): T {
   return items[Math.min(items.length - 1, Math.floor(rng() * items.length))];
 }
 
-/** Pick a diatonic index, favouring small melodic moves when `melodic` is set. */
-function pickIndex(pool: number[], rng: Rng, prev: number | undefined, melodic: boolean): number {
+/** Weight of a position nobody has been asked yet when a focus map is in use. */
+const NEUTRAL_FOCUS = 1.5;
+
+/**
+ * Pick a diatonic index, favouring small melodic moves when `melodic` is set
+ * and, when `weight` is given, positions with a higher weight.
+ */
+function pickIndex(pool: number[], rng: Rng, prev: number | undefined, melodic: boolean, weight?: (index: number) => number): number {
   let candidates = pool.length > 1 && prev !== undefined ? pool.filter((i) => i !== prev) : pool;
   if (melodic && prev !== undefined) {
     const near = candidates.filter((i) => Math.abs(i - prev) <= 4);
     if (near.length) candidates = near;
   }
-  return pick(candidates, rng);
+  if (!weight) return pick(candidates, rng);
+  const weights = candidates.map((i) => Math.max(0.01, weight(i)));
+  let r = rng() * weights.reduce((s, w) => s + w, 0);
+  for (let i = 0; i < candidates.length; i++) {
+    r -= weights[i];
+    if (r < 0) return candidates[i];
+  }
+  return candidates[candidates.length - 1];
 }
 
 function chooseAccidental(letter: Spelling['letter'], key: KeyName, config: SessionConfig, rng: Rng): Accidental {
@@ -204,7 +219,14 @@ export function generatePrompt(config: SessionConfig, id: number, rng: Rng = Mat
 
   switch (config.mode) {
     case 'single': {
-      events.push({ notes: [note(pickIndex(pool, rng, prev, false))], duration: 'w', beat: 0, rest: false });
+      const focus = config.focus;
+      const weight = focus
+        ? (i: number) => {
+            const s = spellingFromDiatonic(i);
+            return focus[`${clef}:${s.letter}${s.octave}`] ?? NEUTRAL_FOCUS;
+          }
+        : undefined;
+      events.push({ notes: [note(pickIndex(pool, rng, prev, false, weight))], duration: 'w', beat: 0, rest: false });
       break;
     }
     case 'sequence': {
