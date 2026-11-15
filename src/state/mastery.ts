@@ -1,4 +1,5 @@
 import { BASE_CONFIG, type Clef, type NotePool, type SessionConfig } from '../music/difficulty';
+import { parseNoteName, spellingFromDiatonic } from '../music/notes';
 import type { Answer } from './session';
 
 /**
@@ -116,16 +117,42 @@ export function focusWeights(mastery: Mastery): Record<string, number> {
   return weights;
 }
 
-/** A single-note session made only of the weakest notes, or null when there are too few. */
+/** Smallest pool a clef may have: with fewer, "never the same note twice" makes the order predictable. */
+const MIN_POOL = 3;
+
+/** Grows a short list of note names with the staff positions next to them, nearest first. */
+function withNeighbors(names: string[], size: number): string[] {
+  const indices = new Set(names.map((n) => parseNoteName(n).index));
+  for (let step = 1; indices.size < size && step < 8; step++) {
+    for (const base of names.map((n) => parseNoteName(n).index)) {
+      for (const candidate of [base + step, base - step]) {
+        if (indices.size < size) indices.add(candidate);
+      }
+    }
+  }
+  return [...indices]
+    .sort((a, b) => a - b)
+    .map((i) => {
+      const s = spellingFromDiatonic(i);
+      return `${s.letter}${s.octave}`;
+    });
+}
+
+/**
+ * A single-note session built around the weakest notes, or null when there
+ * are too few. A clef with only one or two weak notes is filled out with
+ * their neighbors on the staff (the notes they are most likely confused
+ * with); a clef with a single weak note is left out when the other clef has
+ * plenty, so the session stays on the real problem.
+ */
 export function weakSpotConfig(mastery: Mastery, maxNotes = 8, minNotes = 3): SessionConfig | null {
   const weak = weakNotes(mastery).slice(0, maxNotes);
   if (weak.length < minNotes) return null;
   const byClef = new Map<Clef, string[]>();
   for (const w of weak) byClef.set(w.clef, [...(byClef.get(w.clef) ?? []), w.name]);
-  // A clef with a single note would repeat it endlessly: fold lone notes out unless that is all there is.
-  const notePool: NotePool[] = [...byClef.entries()].map(([clef, notes]) => ({ clef, notes }));
-  const usable = notePool.filter((p) => p.notes.length >= 2);
-  const pools = usable.length ? usable : notePool;
+  let entries = [...byClef.entries()];
+  if (entries.some(([, notes]) => notes.length >= MIN_POOL)) entries = entries.filter(([, notes]) => notes.length > 1);
+  const pools: NotePool[] = entries.map(([clef, notes]) => ({ clef, notes: withNeighbors(notes, MIN_POOL) }));
   const count = pools.reduce((s, p) => s + p.notes.length, 0);
   return {
     ...BASE_CONFIG,
