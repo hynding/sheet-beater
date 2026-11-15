@@ -97,13 +97,18 @@ export interface TrackerOptions {
   releaseFrames: number;
   /** A held note sounding again this many times louder than its quietest point is a new strike. */
   reattackRatio: number;
+  /** Frames after an onset during which the same note cannot fire again (its level is still rising). */
+  refractoryFrames: number;
 }
 
-export const DEFAULT_TRACKER: TrackerOptions = { stableFrames: 3, minRms: 0.01, releaseFrames: 3, reattackRatio: 2.2 };
+export const DEFAULT_TRACKER: TrackerOptions = { stableFrames: 3, minRms: 0.01, releaseFrames: 2, reattackRatio: 1.8, refractoryFrames: 4 };
 
 /**
- * Turns frames into note-on events: a note fires once when it has been heard
- * steadily, again only after silence, a different note, or a clear re-strike.
+ * Turns frames into note-on events. A note fires once when it has been heard
+ * steadily. The same note fires again only when it is clearly struck again:
+ * its level jumps well above the quietest point since the last strike, where
+ * a gap (however short) counts as quiet. A different note fires as soon as
+ * it is steady.
  */
 export function createNoteTracker(options: Partial<TrackerOptions> = {}) {
   const o = { ...DEFAULT_TRACKER, ...options };
@@ -112,6 +117,14 @@ export function createNoteTracker(options: Partial<TrackerOptions> = {}) {
   let active: number | null = null;
   let silent = 0;
   let quietest = Infinity;
+  let sinceOnset = Infinity;
+
+  const fire = (midi: number, level: number) => {
+    active = midi;
+    quietest = level;
+    sinceOnset = 0;
+    return midi;
+  };
 
   return {
     /** The note currently sounding, if any. */
@@ -120,10 +133,13 @@ export function createNoteTracker(options: Partial<TrackerOptions> = {}) {
     },
     /** Feed one frame; returns a MIDI note when a new note starts. */
     push(frame: Frame): number | null {
+      sinceOnset++;
       const midi = frame.rms >= o.minRms ? frame.midi : null;
       if (midi === null) {
         candidate = null;
         run = 0;
+        // A gap, even one frame long, lowers the floor a re-strike is measured from.
+        quietest = Math.min(quietest, frame.rms);
         if (++silent >= o.releaseFrames) active = null;
         return null;
       }
@@ -133,20 +149,15 @@ export function createNoteTracker(options: Partial<TrackerOptions> = {}) {
         candidate = midi;
         run = 1;
       }
-      if (midi === active) {
-        // Same note still sounding: only a clear jump in level is a new strike.
-        if (frame.rms > quietest * o.reattackRatio && run >= o.stableFrames) {
-          quietest = frame.rms;
-          return midi;
-        }
-        quietest = Math.min(quietest, frame.rms);
+      if (midi !== active) return run >= o.stableFrames ? fire(midi, frame.rms) : null;
+      // Same note as the one sounding.
+      if (sinceOnset < o.refractoryFrames) {
+        // The analysis window is still filling with the new strike: follow the level up.
+        quietest = frame.rms;
         return null;
       }
-      if (run >= o.stableFrames) {
-        active = midi;
-        quietest = frame.rms;
-        return midi;
-      }
+      if (run >= o.stableFrames && frame.rms > quietest * o.reattackRatio) return fire(midi, frame.rms);
+      quietest = Math.min(quietest, frame.rms);
       return null;
     },
     reset() {
@@ -155,6 +166,7 @@ export function createNoteTracker(options: Partial<TrackerOptions> = {}) {
       active = null;
       silent = 0;
       quietest = Infinity;
+      sinceOnset = Infinity;
     },
   };
 }
@@ -172,4 +184,20 @@ export function analyseFrame(buf: Float32Array, sampleRate: number, minFreq: num
   if (!estimate || estimate.clarity < MIN_CLARITY) return { midi: null, rms: level };
   const { midi, cents } = freqToMidi(estimate.freq);
   return { midi: Math.abs(cents) <= MAX_CENTS ? midi : null, rms: level };
+}
+
+/** Highest frequency searched: above the top key of a piano (C8 is 4186 Hz). */
+export const MAX_SEARCH_HZ = 4400;
+
+/**
+ * What to listen for, given the keyboard on screen. The search always runs to
+ * the top of the piano: if it stopped just above the keyboard, a note played
+ * an octave too high would be heard as its lower octave and marked correct.
+ * Notes up to an octave outside the keyboard are reported (they are wrong
+ * answers worth showing); anything further out is ignored as stray sound.
+ */
+export function micSearchRange(low: number, high: number): { minFreq: number; maxFreq: number; lowest: number; highest: number } {
+  const lowest = low - 12;
+  const highest = high + 12;
+  return { minFreq: 440 * Math.pow(2, (lowest - 1 - 69) / 12), maxFreq: MAX_SEARCH_HZ, lowest, highest };
 }

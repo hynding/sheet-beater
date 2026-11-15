@@ -82,6 +82,8 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit, onTog
   const phaseRef = useRef<Phase>('asking');
   const eventRef = useRef(0);
   const clock = useRef<RhythmClock | null>(null);
+  /** Seconds by which the current input method reports notes late (microphone); 0 for keys. */
+  const inputGrace = useRef(0);
   const timers = useRef<number[]>([]);
   const raf = useRef<number | undefined>(undefined);
 
@@ -178,14 +180,14 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit, onTog
       const barEnd = c.barStart + c.beatsPerBar * c.secondsPerBeat;
       prompt.events.forEach((e, i) => {
         if (c.judged[i]) return;
-        if (now > missDeadline(onsets, playable, i, barEnd, windows.good / 1000)) {
+        if (now > missDeadline(onsets, playable, i, barEnd, windows.good / 1000, inputGrace.current)) {
           c.judged[i] = true;
           record(prompt, i, [], false, 'miss');
           setStates((s) => s.map((v, j) => (j === i ? 'wrong' : v)));
           setMistakeKeys((prev) => new Set(prev).add(e.notes[0].midi));
         }
       });
-      if (beatNow >= c.beatsPerBar + windows.good / 1000 / c.secondsPerBeat) {
+      if (beatNow >= c.beatsPerBar + (windows.good / 1000 + inputGrace.current) / c.secondsPerBeat) {
         setPhaseBoth('feedback');
         setBeat(c.beatsPerBar);
         later(advancePrompt, BAR_END_DELAY_MS);
@@ -356,6 +358,7 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit, onTog
   useMidiInput((midi) => handleNoteOn(midi));
   const { baseMidi } = useComputerKeyboard((midi) => handleNoteOn(midi));
   const mic = useMicInput(handleNoteOn, options.micInput, range);
+  inputGrace.current = mic.delayMs / 1000;
 
   const labelled = options.keyLabels === 'always' ? 'all' : options.keyLabels === 'onMistake' ? mistakeKeys : undefined;
   const correctCount = answers.current.filter((a) => a.correct).length;

@@ -90,4 +90,16 @@ describe('matching presses to notes', () => {
     expect(missDeadline(onsets, playable, 3, 4, 0.2)).toBe(3.5); // last note: half way to the bar end
     expect(missDeadline([0, 0.25, 0.5], [true, true, true], 0, 1, 0.2)).toBe(0.2); // fast notes: never before the window closes
   });
+
+  it('waits longer for input that is reported late', () => {
+    // 66 bpm, two eighths then quarters; a microphone reports notes about 142 ms after they sound.
+    const spb = 60 / 66;
+    const bar = [0, 0.5, 1, 2, 3].map((b) => b * spb);
+    const all = bar.map(() => true);
+    const played = 0.1; // first note 100 ms late: a good hit
+    const reportedAt = played + 0.142;
+    expect(reportedAt).toBeGreaterThan(missDeadline(bar, all, 0, 4 * spb, 0.2)); // would have been written off
+    expect(reportedAt).toBeLessThan(missDeadline(bar, all, 0, 4 * spb, 0.2, 0.142));
+    expect(nearestEvent(bar, bar.map(() => false), reportedAt - 0.142, spb / 2)).toBe(0);
+  });
 });

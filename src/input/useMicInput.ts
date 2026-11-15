@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { analyseFrame, createNoteTracker, DEFAULT_TRACKER } from '../audio/pitch';
-import { midiToFrequency } from '../music/notes';
+import { analyseFrame, createNoteTracker, DEFAULT_TRACKER, micSearchRange } from '../audio/pitch';
 
 export type MicState = 'off' | 'starting' | 'listening' | 'denied' | 'missing' | 'unsupported' | 'error';
 
@@ -8,6 +7,8 @@ export interface MicStatus {
   state: MicState;
   /** The note currently heard, if any. */
   note: number | null;
+  /** How long after a note is struck it is reported, in ms (0 while not listening). */
+  delayMs: number;
 }
 
 const FRAME_MS = 33;
@@ -31,23 +32,23 @@ export function useMicInput(onNoteOn: (midi: number, delayMs: number) => void, e
   handler.current = onNoteOn;
   const low = range?.low ?? 36;
   const high = range?.high ?? 96;
-  const [status, setStatus] = useState<MicStatus>({ state: 'off', note: null });
+  const [status, setStatus] = useState<MicStatus>({ state: 'off', note: null, delayMs: 0 });
 
   useEffect(() => {
     if (!enabled) {
-      setStatus({ state: 'off', note: null });
+      setStatus({ state: 'off', note: null, delayMs: 0 });
       return;
     }
     const AudioCtor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!navigator.mediaDevices?.getUserMedia || !AudioCtor) {
-      setStatus({ state: 'unsupported', note: null });
+      setStatus({ state: 'unsupported', note: null, delayMs: 0 });
       return;
     }
     let cancelled = false;
     let stream: MediaStream | null = null;
     let ctx: AudioContext | null = null;
     let timer: number | undefined;
-    setStatus({ state: 'starting', note: null });
+    setStatus({ state: 'starting', note: null, delayMs: 0 });
 
     navigator.mediaDevices
       // Processing meant for speech smears or gates musical notes, so it is switched off.
@@ -67,22 +68,20 @@ export function useMicInput(onNoteOn: (midi: number, delayMs: number) => void, e
         const buf = new Float32Array(FFT_SIZE);
         const tracker = createNoteTracker();
         const delay = micDelayMs(ctx.sampleRate);
-        // Search a little beyond the keyboard so a neighbouring wrong note is still heard as itself.
-        const minFreq = midiToFrequency(low - 2);
-        const maxFreq = midiToFrequency(high + 2);
+        const { minFreq, maxFreq, lowest, highest } = micSearchRange(low, high);
         let shown: number | null = null;
-        setStatus({ state: 'listening', note: null });
+        setStatus({ state: 'listening', note: null, delayMs: delay });
 
         timer = window.setInterval(() => {
           if (!ctx) return;
           analyser.getFloatTimeDomainData(buf);
           const frame = analyseFrame(buf, ctx.sampleRate, minFreq, maxFreq);
-          const inRange = frame.midi !== null && frame.midi >= low - 1 && frame.midi <= high + 1;
+          const inRange = frame.midi !== null && frame.midi >= lowest && frame.midi <= highest;
           const on = tracker.push(inRange ? frame : { midi: null, rms: frame.rms });
           if (on !== null) handler.current(on, delay);
           if (tracker.current !== shown) {
             shown = tracker.current;
-            setStatus({ state: 'listening', note: shown });
+            setStatus({ state: 'listening', note: shown, delayMs: delay });
           }
         }, FRAME_MS);
       })
@@ -90,7 +89,7 @@ export function useMicInput(onNoteOn: (midi: number, delayMs: number) => void, e
         if (cancelled) return;
         const name = err instanceof DOMException ? err.name : '';
         const state: MicState = name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : name === 'NotFoundError' || name === 'OverconstrainedError' ? 'missing' : 'error';
-        setStatus({ state, note: null });
+        setStatus({ state, note: null, delayMs: 0 });
       });
 
     return () => {

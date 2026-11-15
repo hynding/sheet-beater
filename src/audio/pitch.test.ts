@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { midiToFrequency } from '../music/notes';
-import { analyseFrame, createNoteTracker, detectPitch, freqToMidi, rms } from './pitch';
+import { analyseFrame, createNoteTracker, detectPitch, freqToMidi, micSearchRange, rms } from './pitch';
 
 const SR = 48000;
 
@@ -76,6 +76,7 @@ describe('analyseFrame', () => {
 
 describe('note tracker', () => {
   const f = (midi: number | null, level = 0.1) => ({ midi, rms: level });
+  const fired = (frames: Array<{ midi: number | null; rms: number }>, t = createNoteTracker()) => frames.map((x) => t.push(x)).filter((x) => x !== null);
 
   it('fires once per steadily heard note', () => {
     const t = createNoteTracker();
@@ -90,21 +91,86 @@ describe('note tracker', () => {
     expect(out).toEqual([null, null, null, null, null, null, null, 60]);
   });
 
-  it('fires the same note again after silence or a clear re-strike, but not while it rings', () => {
-    const t = createNoteTracker();
-    const ring = [f(60, 0.2), f(60, 0.2), f(60, 0.2), f(60, 0.15), f(60, 0.1), f(60, 0.07)];
-    expect(ring.map((x) => t.push(x)).filter((x) => x !== null)).toEqual([60]);
-    // struck again while still sounding: level jumps well above its quietest point
-    expect([f(60, 0.2), f(60, 0.2)].map((x) => t.push(x)).filter((x) => x !== null)).toEqual([60]);
-    // decays, a small swell is not a strike
-    expect([f(60, 0.1), f(60, 0.12), f(60, 0.11)].map((x) => t.push(x)).filter((x) => x !== null)).toEqual([]);
-    // silence, then the same note
-    const again = [f(null, 0), f(null, 0), f(null, 0), f(60), f(60), f(60)].map((x) => t.push(x));
-    expect(again.filter((x) => x !== null)).toEqual([60]);
+  it('fires once while the level is still rising after the onset', () => {
+    expect(fired([f(60, 0.03), f(60, 0.08), f(60, 0.15), f(60, 0.2), f(60, 0.22), f(60, 0.2), f(60, 0.17), f(60, 0.15)])).toEqual([60]);
+  });
+
+  it('does not fire again while a note rings or swells slightly', () => {
+    expect(fired([f(60, 0.2), f(60, 0.2), f(60, 0.2), f(60, 0.15), f(60, 0.1), f(60, 0.07), f(60, 0.09), f(60, 0.1), f(60, 0.08)])).toEqual([60]);
+  });
+
+  it('hears the same key struck again after a gap of any length', () => {
+    for (const gap of [1, 2, 5]) {
+      const frames = [f(60, 0.2), f(60, 0.2), f(60, 0.2), f(60, 0.15), f(60, 0.12), ...Array.from({ length: gap }, () => f(null, 0.002)), f(60, 0.2), f(60, 0.2), f(60, 0.2), f(60, 0.18)];
+      expect(fired(frames), `gap of ${gap} frame(s)`).toEqual([60, 60]);
+    }
+  });
+
+  it('hears an undamped re-strike exactly once', () => {
+    const frames = [0.2, 0.2, 0.2, 0.18, 0.15, 0.12, 0.1, 0.09, 0.14, 0.2, 0.22, 0.2, 0.18, 0.16, 0.14].map((l) => f(60, l));
+    expect(fired(frames)).toEqual([60, 60]);
   });
 
   it('treats quiet frames as silence', () => {
-    const t = createNoteTracker();
-    expect([f(60, 0.001), f(60, 0.001), f(60, 0.001), f(60, 0.001)].map((x) => t.push(x)).every((x) => x === null)).toBe(true);
+    expect(fired([f(60, 0.001), f(60, 0.001), f(60, 0.001), f(60, 0.001)])).toEqual([]);
+  });
+});
+
+/** Two strikes of the same note with a damped gap between them, as one long signal. */
+function twoStrikes(freq: number, gapSec: number, firstSec = 0.4, secondSec = 0.5): Float32Array {
+  const strike = (sec: number) => {
+    const n = Math.round(sec * SR);
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const t = i / SR;
+      let v = 0;
+      [1, 0.55, 0.35, 0.2].forEach((h, k) => (v += h * Math.sin(2 * Math.PI * (k + 1) * freq * t)));
+      const release = Math.min(1, (sec - t) / 0.01); // the damper stops the string quickly
+      out[i] = 0.14 * Math.min(1, t / 0.008) * Math.exp(-t * 3.5) * release * v;
+    }
+    return out;
+  };
+  const lead = new Float32Array(Math.round(0.15 * SR));
+  const gap = new Float32Array(Math.round(gapSec * SR));
+  const tail = new Float32Array(Math.round(0.3 * SR));
+  const parts = [lead, strike(firstSec), gap, strike(secondSec), tail];
+  const out = new Float32Array(parts.reduce((s, p) => s + p.length, 0));
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
+  return out;
+}
+
+describe('repeated notes through the whole analysis chain', () => {
+  const HOP = Math.round(0.033 * SR);
+  const WINDOW = 4096;
+  const { minFreq, maxFreq } = micSearchRange(60, 83);
+
+  it('reports a re-struck key once per strike, whatever the gap and frame alignment', () => {
+    for (const gapSec of [0.03, 0.06, 0.1, 0.3]) {
+      const signal = twoStrikes(midiToFrequency(67), gapSec);
+      for (let offset = 0; offset < HOP; offset += Math.round(HOP / 11)) {
+        const tracker = createNoteTracker();
+        const onsets: number[] = [];
+        for (let end = WINDOW + offset; end <= signal.length; end += HOP) {
+          const on = tracker.push(analyseFrame(signal.subarray(end - WINDOW, end), SR, minFreq, maxFreq));
+          if (on !== null) onsets.push(on);
+        }
+        expect(onsets, `gap ${gapSec * 1000} ms, offset ${offset}`).toEqual([67, 67]);
+      }
+    }
+  });
+});
+
+describe('micSearchRange', () => {
+  it('hears a note played an octave too high as itself, not as the prompt', () => {
+    const { minFreq, maxFreq, lowest, highest } = micSearchRange(60, 83); // Beginner keyboard, C4 to B5
+    expect(analyseFrame(tone(midiToFrequency(88)), SR, minFreq, maxFreq).midi).toBe(88); // E6, not E5
+    expect(analyseFrame(tone(midiToFrequency(100)), SR, minFreq, maxFreq).midi).toBe(100);
+    expect(analyseFrame(tone(midiToFrequency(52)), SR, minFreq, maxFreq).midi).toBe(52); // E3, an octave low
+    expect([lowest, highest]).toEqual([48, 95]);
+    expect(maxFreq).toBeGreaterThan(midiToFrequency(108));
   });
 });
