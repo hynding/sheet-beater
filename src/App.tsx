@@ -4,6 +4,7 @@ import type { Lesson } from './curriculum/lessons';
 import { lessonAfter, loadProgress, recordResult, saveProgress, type Progress, type Stars } from './curriculum/progress';
 import { useMidiInput } from './input/useMidiInput';
 import { applyPreset, configOf, loadSettings, saveSettings, type PresetId, type SessionConfig, type Settings } from './music/difficulty';
+import { LoadBoundary } from './components/LoadBoundary';
 import { CalibrationDialog } from './screens/CalibrationDialog';
 import { ResultsScreen } from './screens/ResultsScreen';
 import { StartScreen, type StartTab } from './screens/StartScreen';
@@ -46,10 +47,9 @@ export default function App() {
 
   // Fetch the notation screens in the background once the start screen has painted.
   useEffect(() => {
+    // Best effort: if this fails the screen loads (and reports failure) when it is opened.
     const warm = () => {
-      void loadLessonIntro();
-      void loadPractice();
-      void loadFreePlay();
+      for (const load of [loadLessonIntro, loadPractice, loadFreePlay]) load().catch(() => undefined);
     };
     if (typeof window.requestIdleCallback === 'function') {
       const id = window.requestIdleCallback(warm, { timeout: 2000 });
@@ -153,38 +153,40 @@ export default function App() {
           midi={midi}
         />
       )}
-      <Suspense
-        fallback={
-          <div className="screen loading" role="status">
-            Loading the notation…
-          </div>
-        }
-      >
-        {screen.name === 'play' && (
-          <FreePlayScreen
-            initialPieceId={screen.pieceId}
-            keyboardSize={settings.keyboardSize}
-            keyLabels={settings.keyLabels === 'always'}
-            onBack={() => {
-              setTab('play');
-              setScreen({ name: 'start' });
-            }}
-          />
-        )}
-        {screen.name === 'intro' && (
-          <LessonIntroScreen lesson={screen.lesson} progress={progress} onStart={() => beginSession(screen.lesson.config, 'lesson', screen.lesson)} onBack={() => setScreen({ name: 'start' })} onCalibrate={() => setCalibrating(true)} />
-        )}
-        {screen.name === 'practice' && (
-          <PracticeScreen
-            key={screen.run}
-            config={screen.config}
-            options={options}
-            title={screen.lesson ? screen.lesson.title : TITLES[screen.source]}
-            onFinish={(result) => finishSession(result, screen.source, screen.lesson)}
-            onQuit={() => setScreen(screen.lesson ? { name: 'intro', lesson: screen.lesson } : { name: 'start' })}
-          />
-        )}
-      </Suspense>
+      <LoadBoundary key={screen.name} onBack={() => setScreen({ name: 'start' })}>
+        <Suspense
+          fallback={
+            <div className="screen loading" role="status">
+              Loading the notation…
+            </div>
+          }
+        >
+          {screen.name === 'play' && (
+            <FreePlayScreen
+              initialPieceId={screen.pieceId}
+              keyboardSize={settings.keyboardSize}
+              keyLabels={settings.keyLabels === 'always'}
+              onBack={() => {
+                setTab('play');
+                setScreen({ name: 'start' });
+              }}
+            />
+          )}
+          {screen.name === 'intro' && (
+            <LessonIntroScreen lesson={screen.lesson} progress={progress} onStart={() => beginSession(screen.lesson.config, 'lesson', screen.lesson)} onBack={() => setScreen({ name: 'start' })} onCalibrate={() => setCalibrating(true)} />
+          )}
+          {screen.name === 'practice' && (
+            <PracticeScreen
+              key={screen.run}
+              config={screen.config}
+              options={options}
+              title={screen.lesson ? screen.lesson.title : TITLES[screen.source]}
+              onFinish={(result) => finishSession(result, screen.source, screen.lesson)}
+              onQuit={() => setScreen(screen.lesson ? { name: 'intro', lesson: screen.lesson } : { name: 'start' })}
+            />
+          )}
+        </Suspense>
+      </LoadBoundary>
       {screen.name === 'results' && (
         <ResultsScreen
           result={screen.result}
