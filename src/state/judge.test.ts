@@ -34,11 +34,12 @@ describe('timing strictness', () => {
 });
 
 describe('medianOffset', () => {
-  const clicks = [0, 600, 1200, 1800, 2400, 3000, 3600, 4200];
+  const clicks = [0, 750, 1500, 2250, 3000, 3750, 4500, 5250];
+  const lagged = (ms: number) => clicks.map((c) => c + ms);
 
-  it('finds the typical lag and ignores stray and double taps', () => {
-    const taps = [70, 655, 1290, 1900, 1930, 2460, 3065, 3990, 4275];
-    //            +70 +55  +90  +100 (dup) +60  +65  (stray) +75
+  it('finds the typical lag and ignores double taps and gaps', () => {
+    const taps = [70, 805, 1590, 2350, 2390, 3060, 3815, 5325];
+    //            +70 +55  +90  +100 (dup) +60  +65  (none) +75
     const r = medianOffset(taps, clicks)!;
     expect(r.matched).toBe(7);
     expect(r.offsetMs).toBe(70);
@@ -46,13 +47,22 @@ describe('medianOffset', () => {
   });
 
   it('handles a player who anticipates the click', () => {
-    expect(medianOffset(clicks.map((c) => c - 30), clicks)!.offsetMs).toBe(-30);
+    expect(medianOffset(lagged(-30), clicks)!.offsetMs).toBe(-30);
+    expect(medianOffset(lagged(-120), clicks)!.offsetMs).toBe(-120);
+  });
+
+  it('measures large delays such as Bluetooth audio without wrapping to the next click', () => {
+    for (const delay of [260, 300, 340, 400, 500, 590]) {
+      const r = medianOffset(lagged(delay), clicks)!;
+      expect(r.offsetMs, `delay ${delay}`).toBe(delay);
+      expect(r.matched).toBe(8);
+    }
   });
 
   it('needs enough matched taps', () => {
-    expect(medianOffset([10, 620, 1210], clicks)).toBeNull();
+    expect(medianOffset([10, 760, 1510], clicks)).toBeNull();
     expect(medianOffset([], clicks)).toBeNull();
-    expect(medianOffset([300, 900, 1500, 2100, 2700], clicks)).toBeNull(); // all half a beat off
+    expect(medianOffset([100], [0])).toBeNull();
   });
 });
 
@@ -65,6 +75,12 @@ describe('matching presses to notes', () => {
     expect(nearestEvent(onsets, [true, false, false, false], 0.3)).toBe(1); // first already played
     expect(nearestEvent(onsets, [true, true, true, true], 1)).toBe(-1);
     expect(nearestEvent(onsets, [false, true, false, false], 1.1)).toBe(2); // rests and played notes are skipped
+  });
+
+  it('leaves a stray press far from any note unassigned', () => {
+    expect(nearestEvent(onsets, [true, false, false, false], 0.3, 0.5)).toBe(-1); // 0.7 from the next note
+    expect(nearestEvent(onsets, [true, false, false, false], 0.6, 0.5)).toBe(1);
+    expect(nearestEvent(onsets, [false, false, false, false], 3.4, 0.5)).toBe(3);
   });
 
   it('waits for a note until a press would belong to the next one', () => {
