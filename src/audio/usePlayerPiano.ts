@@ -30,6 +30,7 @@ export interface PlayerControls {
 
 const LOOKAHEAD_SEC = 0.15;
 const TICK_MS = 30;
+const SEEK_SETTLE_SEC = LOOKAHEAD_SEC + 0.1;
 
 /**
  * Drives playback of a piece. Listen mode schedules notes on the audio clock
@@ -165,7 +166,9 @@ export function usePlayerPiano(piece: Piece | null, mode: PlayerMode, tempoFacto
     }, TICK_MS);
 
     const frame = () => {
-      const beat = startBeat.current + (synth.now() - startTime.current) / secondsPerBeat;
+      // Playback is anchored slightly in the future; until it starts, hold at the anchor
+      // rather than showing a position just before it.
+      const beat = Math.max(startBeat.current, startBeat.current + (synth.now() - startTime.current) / secondsPerBeat);
       if (beat >= total) {
         if (loopRef.current) {
           startBeat.current = 0;
@@ -229,7 +232,9 @@ export function usePlayerPiano(piece: Piece | null, mode: PlayerMode, tempoFacto
       }
       // Listen mode: re-anchor the clock; the scheduler and cursor pick it up on their next tick.
       startBeat.current = target;
-      startTime.current = synth.now() + 0.05;
+      // Start a little later than the scheduler looks ahead, so dragging across
+      // several bars does not sound the first notes of every bar on the way.
+      startTime.current = synth.now() + SEEK_SETTLE_SEC;
       nextStep.current = stepAtBeat(target);
       publish(target);
     },

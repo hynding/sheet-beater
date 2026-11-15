@@ -15,6 +15,14 @@ describe('history', () => {
     expect(addSession(h, { ...result, answers: [] }, 'free')).toBe(h);
   });
 
+  it('does not count idle time when a session was left open', () => {
+    const answers = Array.from({ length: 4 }, () => ({ correct: true }) as Answer);
+    const overnight: SessionResult = { config: BASE_CONFIG, answers, startedAt: 0, endedAt: 9 * 60 * 60 * 1000 };
+    expect(addSession([], overnight, 'free')[0].durationMs).toBe(4 * 30_000);
+    const normal: SessionResult = { ...overnight, endedAt: 20_000 };
+    expect(addSession([], normal, 'free')[0].durationMs).toBe(20_000);
+  });
+
   it('caps the log', () => {
     let h: History = [];
     const result: SessionResult = { config: BASE_CONFIG, answers: [{ correct: true } as Answer], startedAt: 0, endedAt: 1 };

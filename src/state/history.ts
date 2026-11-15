@@ -35,11 +35,18 @@ export function saveHistory(history: History): void {
   }
 }
 
+/**
+ * The most practice time one answer can stand for. A session left open while
+ * the phone sleeps would otherwise log hours and swamp the totals and chart.
+ */
+const MAX_MS_PER_ANSWER = 30_000;
+
 export function addSession(history: History, result: SessionResult, source: SessionRecord['source'], lessonId?: string): History {
   if (result.answers.length === 0) return history;
+  const elapsed = Math.max(0, result.endedAt - result.startedAt);
   const record: SessionRecord = {
     at: result.endedAt,
-    durationMs: Math.max(0, result.endedAt - result.startedAt),
+    durationMs: Math.min(elapsed, result.answers.length * MAX_MS_PER_ANSWER),
     total: result.answers.length,
     correct: result.answers.filter((a) => a.correct).length,
     mode: result.config.mode,

@@ -541,6 +541,8 @@ kbd {
 .intro__footer { gap: 0.6rem; }
 
 .loading { align-items: center; justify-content: center; color: var(--muted); }
+.loading { flex-direction: column; gap: 0.5rem; text-align: center; padding: 1rem; }
+.loading__actions { display: flex; gap: 0.6rem; margin-top: 0.5rem; }
 
 /* Player piano: current bar, next-bar preview and seek bar */
 .freeplay__stage { flex-direction: column; align-items: stretch; gap: 0.3rem; padding-bottom: 0.25rem; }

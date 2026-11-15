@@ -70,10 +70,13 @@ export function FreePlayScreen({ initialPieceId, keyboardSize, keyLabels, micInp
     return h;
   }, [player.activeBass, player.activeTreble, player.expected, mic.note]);
 
-  const bar = piece ? piece.bars[player.bar] : null;
-  const prompt = piece ? barPrompt(piece, player.bar) : null;
+  // The player resets a moment after the piece changes; until then its position
+  // may point past the end of a shorter piece.
+  const barIndex = piece ? Math.min(player.bar, piece.bars.length - 1) : 0;
+  const bar = piece ? piece.bars[barIndex] : null;
+  const prompt = piece ? barPrompt(piece, barIndex) : null;
   // Read-ahead: the bar that follows, so eyes can move on before the hands do.
-  const nextBar = piece ? (player.bar + 1 < piece.bars.length ? player.bar + 1 : loop ? 0 : null) : null;
+  const nextBar = piece ? (barIndex + 1 < piece.bars.length ? barIndex + 1 : loop ? 0 : null) : null;
   const nextPrompt = piece && nextBar !== null ? barPrompt(piece, nextBar) : null;
   const listening = player.playing && mode === 'listen';
   const expectedBeat = mode === 'wait' && player.playing && player.expected.length ? player.beatInBar : null;
@@ -185,13 +188,13 @@ export function FreePlayScreen({ initialPieceId, keyboardSize, keyLabels, micInp
                 type="range"
                 min={1}
                 max={piece.bars.length}
-                value={player.bar + 1}
+                value={barIndex + 1}
                 onChange={(e) => controls.seek(Number(e.target.value) - 1)}
                 aria-label="Bar"
-                aria-valuetext={`Bar ${player.bar + 1} of ${piece.bars.length}`}
+                aria-valuetext={`Bar ${barIndex + 1} of ${piece.bars.length}`}
               />
               <span className="freeplay__barcount">
-                Bar {player.bar + 1} / {piece.bars.length}
+                Bar {barIndex + 1} / {piece.bars.length}
               </span>
             </label>
           )}

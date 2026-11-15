@@ -29,22 +29,24 @@ export function judgeTiming(deltaMs: number, windows: TimingWindows = TIMING): T
 
 /**
  * Works out how far a player's taps trail the scheduled clicks, from a
- * tap-along run. Each click is matched to its nearest tap; clicks with no tap
- * within `maxDistanceMs` are skipped. Returns the median
- * offset in ms (positive = taps arrive after the scheduled time, which is the
- * normal case: the click is heard late and the touch is reported late), or
- * null when fewer than `minMatches` taps could be matched.
+ * tap-along run. A tap belongs to the click whose window it falls in: from
+ * `earlyMs` before that click up to the same point before the next one. The
+ * window is lopsided on purpose. People rarely lead a click by much, but
+ * Bluetooth audio can make them trail it by a third of a second, and a
+ * symmetric "nearest click" rule would read such a tap as early for the
+ * following click. Returns the median offset in ms (positive = taps arrive
+ * after the scheduled time), or null when fewer than `minMatches` clicks got
+ * a tap.
  */
-export function medianOffset(tapsMs: number[], clicksMs: number[], maxDistanceMs = 250, minMatches = 4): { offsetMs: number; matched: number; spreadMs: number } | null {
-  // Work from the clicks: each takes its nearest tap, so a stray or double tap
-  // cannot push out the tap that was really meant for that click.
+export function medianOffset(tapsMs: number[], clicksMs: number[], minMatches = 4, earlyMs = 150): { offsetMs: number; matched: number; spreadMs: number } | null {
+  if (clicksMs.length < 2) return null;
+  const interval = (clicksMs[clicksMs.length - 1] - clicksMs[0]) / (clicksMs.length - 1);
+  const taps = [...tapsMs].sort((a, b) => a - b);
   const deltas: number[] = [];
   for (const click of clicksMs) {
-    let best: number | null = null;
-    for (const tap of tapsMs) {
-      if (best === null || Math.abs(tap - click) < Math.abs(best - click)) best = tap;
-    }
-    if (best !== null && Math.abs(best - click) <= maxDistanceMs) deltas.push(best - click);
+    // The first tap in the window; a second one there is a double tap.
+    const tap = taps.find((t) => t >= click - earlyMs && t < click - earlyMs + interval);
+    if (tap !== undefined) deltas.push(tap - click);
   }
   if (deltas.length < minMatches) return null;
   deltas.sort((a, b) => a - b);
@@ -57,15 +59,17 @@ export function medianOffset(tapsMs: number[], clicksMs: number[], maxDistanceMs
 /**
  * Which note a press belongs to: the nearest onset that has not been judged
  * yet. A slightly late note is then scored as late for its own beat instead
- * of early for the next one. Returns -1 when every note has been judged.
+ * of early for the next one. Returns -1 when every note has been judged, or
+ * when the nearest one is more than `maxDistance` away: a stray tap far from
+ * any note should not use up the note that follows it.
  */
-export function nearestEvent(onsets: number[], judged: boolean[], time: number): number {
+export function nearestEvent(onsets: number[], judged: boolean[], time: number, maxDistance = Infinity): number {
   let best = -1;
   for (let i = 0; i < onsets.length; i++) {
     if (judged[i]) continue;
     if (best === -1 || Math.abs(onsets[i] - time) < Math.abs(onsets[best] - time)) best = i;
   }
-  return best;
+  return best !== -1 && Math.abs(onsets[best] - time) > maxDistance ? -1 : best;
 }
 
 /**

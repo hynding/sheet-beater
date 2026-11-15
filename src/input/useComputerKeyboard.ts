@@ -6,6 +6,18 @@ const KEY_TO_SEMITONE: Record<string, number> = {
   k: 12, o: 13, l: 14, p: 15, ';': 16, "'": 17,
 };
 
+/**
+ * True for controls that use letter keys themselves: text fields and menus.
+ * Sliders, checkboxes and buttons keep focus after a click but ignore
+ * letters, so notes typed while one of them is focused still count.
+ */
+export function isTypingTarget(target: { tagName: string; type?: string; isContentEditable?: boolean }): boolean {
+  if (target.isContentEditable) return true;
+  if (target.tagName === 'SELECT' || target.tagName === 'TEXTAREA') return true;
+  if (target.tagName !== 'INPUT') return false;
+  return !['range', 'checkbox', 'radio', 'button', 'submit', 'reset'].includes((target.type ?? 'text').toLowerCase());
+}
+
 export interface ComputerKeyboardState {
   /** MIDI pitch that the "a" key currently plays (a C). */
   baseMidi: number;
@@ -25,8 +37,8 @@ export function useComputerKeyboard(onNoteOn: (midi: number) => void, enabled = 
     if (!enabled) return;
     const down = (e: KeyboardEvent) => {
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA')) return;
+      const target = e.target as HTMLInputElement | null;
+      if (target && isTypingTarget(target)) return;
       const key = e.key.toLowerCase();
       if (key === 'z' || key === 'x') {
         base.current = Math.max(24, Math.min(96, base.current + (key === 'z' ? -12 : 12)));

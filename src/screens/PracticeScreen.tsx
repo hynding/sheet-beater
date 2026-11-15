@@ -250,10 +250,13 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit, onTog
         // count-in. Accept it once it is within reach of the bar; anything
         // earlier is the player tapping along with the count.
         if (now < c.barStart - windows.good / 1000) return;
+        // A press more than half a beat (or the timing window, if wider) from every
+        // remaining note is a stray tap: it is ignored rather than spent on the next note.
         const ei = nearestEvent(
           p.events.map((ev) => c.barStart + ev.beat * c.secondsPerBeat),
           c.judged,
           now,
+          Math.max(windows.good / 1000, c.secondsPerBeat / 2),
         );
         if (ei === -1) return;
         const e = p.events[ei];
