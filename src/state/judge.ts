@@ -77,7 +77,7 @@ export function nearestEvent(onsets: number[], judged: boolean[], time: number, 
  * press would be nearer the next note (or the end of the bar), and never
  * before the timing window has closed. `playable[i]` is false for rests.
  */
-export function missDeadline(onsets: number[], playable: boolean[], i: number, endTime: number, goodSec: number): number {
+export function missDeadline(onsets: number[], playable: boolean[], i: number, endTime: number, goodSec: number, graceSec = 0): number {
   let next = endTime;
   for (let j = i + 1; j < onsets.length; j++) {
     if (playable[j]) {
@@ -85,7 +85,9 @@ export function missDeadline(onsets: number[], playable: boolean[], i: number, e
       break;
     }
   }
-  return onsets[i] + Math.max(goodSec, (next - onsets[i]) / 2);
+  // `graceSec` covers input that is reported late (microphone detection): a note
+  // struck in time must not be written off before its report can arrive.
+  return onsets[i] + Math.max(goodSec, (next - onsets[i]) / 2) + graceSec;
 }
 
 export function isOnTime(t: Timing): boolean {

@@ -4,6 +4,7 @@ import { usePlayerPiano, type PlayerMode } from '../audio/usePlayerPiano';
 import { Piano, type KeyHighlight } from '../components/Piano';
 import { Staff, type EventState } from '../components/Staff';
 import { useComputerKeyboard } from '../input/useComputerKeyboard';
+import { micLabel, useMicInput } from '../input/useMicInput';
 import { useMidiInput } from '../input/useMidiInput';
 import type { KeyboardSize } from '../music/difficulty';
 import { DURATION_BEATS } from '../music/generator';
@@ -16,6 +17,8 @@ interface FreePlayScreenProps {
   initialPieceId: string | null;
   keyboardSize: KeyboardSize;
   keyLabels: boolean;
+  micInput: boolean;
+  onToggleMic: () => void;
   onBack: () => void;
 }
 
@@ -31,7 +34,7 @@ function eventStates(events: { beat: number; duration: keyof typeof DURATION_BEA
   });
 }
 
-export function FreePlayScreen({ initialPieceId, keyboardSize, keyLabels, onBack }: FreePlayScreenProps) {
+export function FreePlayScreen({ initialPieceId, keyboardSize, keyLabels, micInput, onToggleMic, onBack }: FreePlayScreenProps) {
   const [pieceId, setPieceId] = useState<string>(initialPieceId ?? '');
   const [mode, setMode] = useState<PlayerMode>('listen');
   const [tempoIndex, setTempoIndex] = useState(3);
@@ -55,14 +58,17 @@ export function FreePlayScreen({ initialPieceId, keyboardSize, keyLabels, onBack
   );
   useMidiInput((midi) => handleNoteOn(midi));
   const { baseMidi } = useComputerKeyboard(handleNoteOn);
+  // A note heard through the microphone already made its own sound: only pass it to the player piano.
+  const mic = useMicInput((midi) => controls.notePressed(midi), micInput, range);
 
   const highlights = useMemo(() => {
     const h: Partial<Record<number, KeyHighlight>> = {};
     for (const m of player.activeBass) h[m] = 'held';
     for (const m of player.activeTreble) h[m] = 'correct';
     for (const m of player.expected) h[m] = 'answer';
+    if (mic.note !== null && h[mic.note] === undefined) h[mic.note] = 'pressed';
     return h;
-  }, [player.activeBass, player.activeTreble, player.expected]);
+  }, [player.activeBass, player.activeTreble, player.expected, mic.note]);
 
   // The player resets a moment after the piece changes; until then its position
   // may point past the end of a shorter piece.
@@ -167,6 +173,10 @@ export function FreePlayScreen({ initialPieceId, keyboardSize, keyLabels, onBack
         )}
         <div className="freeplay__bar muted small">
           <span className="freeplay__status">{piece ? [piece.title, piece.keyLabel ?? (piece.key !== 'C' ? describeKey(piece.key) : null), status].filter(Boolean).join(' · ') : status}</span>
+          <button type="button" className={`btn btn--ghost mic mic--${mic.state}`} onClick={onToggleMic} aria-pressed={micInput} aria-label="Microphone input" title="Listen for a real piano through the microphone">
+            <span aria-hidden="true">🎤</span>
+            {micInput && <span className="mic__note">{micLabel(mic, (m) => midiToName(m))}</span>}
+          </button>
           {piece && (
             <label className="freeplay__loop">
               <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} /> Loop

@@ -348,6 +348,10 @@ export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progr
                     <option value="large">Large</option>
                   </select>
                 </label>
+                <label className="field field--row">
+                  <input type="checkbox" checked={settings.micInput} onChange={(e) => update({ micInput: e.target.checked })} />
+                  <span>Listen for a real piano (microphone, experimental)</span>
+                </label>
                 <label className="field">
                   <span>Rhythm timing</span>
                   <select value={settings.timingStrictness} onChange={(e) => update({ timingStrictness: e.target.value as Settings['timingStrictness'] })}>
@@ -373,6 +377,7 @@ export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progr
                 <li>
                   Computer keyboard: <kbd>A</kbd>–<kbd>K</kbd> are white keys, <kbd>W</kbd> <kbd>E</kbd> <kbd>T</kbd> <kbd>Y</kbd> <kbd>U</kbd> are black keys, <kbd>Z</kbd> / <kbd>X</kbd> change octave.
                 </li>
+                <li>Acoustic piano: turn on the microphone here or with the 🎤 button while playing. It hears one note at a time and the sound never leaves the device.</li>
                 <li>
                   MIDI keyboard:{' '}
                   {midi.error

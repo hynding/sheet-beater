@@ -126,7 +126,9 @@ export default function App() {
     keyboardSize: settings.keyboardSize,
     timingStrictness: settings.timingStrictness,
     timingOffsetMs: settings.timingOffsetMs,
+    micInput: settings.micInput,
   };
+  const toggleMic = useCallback(() => setSettings((prev) => ({ ...prev, micInput: !prev.micInput })), []);
 
   return (
     <div className="app">
@@ -166,6 +168,8 @@ export default function App() {
               initialPieceId={screen.pieceId}
               keyboardSize={settings.keyboardSize}
               keyLabels={settings.keyLabels === 'always'}
+              micInput={settings.micInput}
+              onToggleMic={toggleMic}
               onBack={() => {
                 setTab('play');
                 setScreen({ name: 'start' });
@@ -182,6 +186,7 @@ export default function App() {
               options={options}
               title={screen.lesson ? screen.lesson.title : TITLES[screen.source]}
               onFinish={(result) => finishSession(result, screen.source, screen.lesson)}
+              onToggleMic={toggleMic}
               onQuit={() => setScreen(screen.lesson ? { name: 'intro', lesson: screen.lesson } : { name: 'start' })}
             />
           )}
