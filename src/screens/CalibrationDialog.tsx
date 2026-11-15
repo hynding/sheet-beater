@@ -9,7 +9,11 @@ interface CalibrationDialogProps {
   onClose: () => void;
 }
 
-const BPM = 100;
+/**
+ * Slow enough that a tap trailing its click by half a second (Bluetooth
+ * headphones can do that) still clearly belongs to that click.
+ */
+const BPM = 80;
 const CLICKS = 12;
 /** The first clicks are for finding the pulse and are not measured. */
 const WARM_UP = 4;

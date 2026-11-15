@@ -70,16 +70,33 @@ describe('mastery', () => {
     expect(weakSpotConfig({})).toBeNull();
     let m: Mastery = {};
     for (const [letter, octave] of [['A', 5], ['C', 6], ['B', 3]] as const) m = repeat(m, prompt('treble', letter, octave), 1, 3);
-    m = repeat(m, prompt('bass', 'E', 2), 0, 2); // a lone bass note is left out
+    m = repeat(m, prompt('bass', 'E', 2), 0, 2); // a lone bass note is left out while treble has plenty
     const config = weakSpotConfig(m)!;
     expect(config.mode).toBe('single');
     expect(config.clef).toBe('treble');
-    expect(config.notePool).toEqual([{ clef: 'treble', notes: expect.arrayContaining(['A5', 'C6', 'B3']) }]);
+    expect(config.notePool).toEqual([{ clef: 'treble', notes: ['B3', 'A5', 'C6'] }]);
     const names = new Set(generatePrompts(config).map((p) => `${p.events[0].notes[0].letter}${p.events[0].notes[0].octave}`));
     expect([...names].every((n) => ['A5', 'C6', 'B3'].includes(n))).toBe(true);
 
     m = repeat(m, prompt('bass', 'G', 2), 0, 2);
-    expect(weakSpotConfig(m)!.clef).toBe('grand');
+    const grand = weakSpotConfig(m)!;
+    expect(grand.clef).toBe('grand');
+    expect(grand.notePool!.find((p) => p.clef === 'bass')!.notes).toEqual(['E2', 'F2', 'G2']); // two weak notes plus the one between
+  });
+
+  it('never leaves a clef with fewer than three notes to choose from', () => {
+    let m: Mastery = {};
+    m = repeat(m, prompt('treble', 'F', 4), 0, 3);
+    m = repeat(m, prompt('treble', 'G', 4), 0, 3);
+    m = repeat(m, prompt('bass', 'C', 3), 0, 3);
+    const config = weakSpotConfig(m)!;
+    expect(config.clef).toBe('grand');
+    for (const pool of config.notePool!) expect(pool.notes.length).toBeGreaterThanOrEqual(3);
+    expect(config.notePool!.find((p) => p.clef === 'bass')!.notes).toEqual(['B2', 'C3', 'D3']);
+    // With three or more notes per clef the order is no longer forced.
+    const treble = generatePrompts({ ...config, noteCount: 60 }).filter((p) => p.clef === 'treble').map((p) => p.events[0].notes[0].index);
+    const alternating = treble.every((v, i) => i < 2 || v === treble[i - 2]);
+    expect(alternating).toBe(false);
   });
 });
 
