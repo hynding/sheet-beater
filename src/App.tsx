@@ -1,18 +1,26 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { synth } from './audio/synth';
 import type { Lesson } from './curriculum/lessons';
 import { lessonAfter, loadProgress, recordResult, saveProgress, type Progress, type Stars } from './curriculum/progress';
 import { useMidiInput } from './input/useMidiInput';
 import { applyPreset, configOf, loadSettings, saveSettings, type PresetId, type SessionConfig, type Settings } from './music/difficulty';
-import { LessonIntroScreen } from './screens/LessonIntroScreen';
+import { LoadBoundary } from './components/LoadBoundary';
 import { CalibrationDialog } from './screens/CalibrationDialog';
-import { FreePlayScreen } from './screens/FreePlayScreen';
-import { PracticeScreen } from './screens/PracticeScreen';
 import { ResultsScreen } from './screens/ResultsScreen';
 import { StartScreen, type StartTab } from './screens/StartScreen';
 import { addSession, loadHistory, saveHistory, type History } from './state/history';
 import { focusWeights, loadMastery, recordAnswers, saveMastery, weakNotes, weakSpotConfig, type Mastery } from './state/mastery';
 import { summarize, type SessionResult } from './state/session';
+
+// Every screen that draws notation pulls in the engraving library and its
+// music font, which are several times larger than the rest of the app. They
+// load on demand so the start screen is usable straight away.
+const loadPractice = () => import('./screens/PracticeScreen');
+const loadFreePlay = () => import('./screens/FreePlayScreen');
+const loadLessonIntro = () => import('./screens/LessonIntroScreen');
+const PracticeScreen = lazy(() => loadPractice().then((m) => ({ default: m.PracticeScreen })));
+const FreePlayScreen = lazy(() => loadFreePlay().then((m) => ({ default: m.FreePlayScreen })));
+const LessonIntroScreen = lazy(() => loadLessonIntro().then((m) => ({ default: m.LessonIntroScreen })));
 
 /** Where a session was started from; decides its title, where "back" goes and what the results offer. */
 type Source = 'lesson' | 'free' | 'weak';
@@ -36,6 +44,20 @@ export default function App() {
   const [portrait, setPortrait] = useState(false);
   const [calibrating, setCalibrating] = useState(false);
   const midi = useMidiInput(() => undefined, screen.name === 'start');
+
+  // Fetch the notation screens in the background once the start screen has painted.
+  useEffect(() => {
+    // Best effort: if this fails the screen loads (and reports failure) when it is opened.
+    const warm = () => {
+      for (const load of [loadLessonIntro, loadPractice, loadFreePlay]) load().catch(() => undefined);
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(warm, { timeout: 2000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(warm, 300);
+    return () => window.clearTimeout(id);
+  }, []);
 
   useEffect(() => saveSettings(settings), [settings]);
   useEffect(() => saveProgress(progress), [progress]);
@@ -131,30 +153,40 @@ export default function App() {
           midi={midi}
         />
       )}
-      {screen.name === 'play' && (
-        <FreePlayScreen
-          initialPieceId={screen.pieceId}
-          keyboardSize={settings.keyboardSize}
-          keyLabels={settings.keyLabels === 'always'}
-          onBack={() => {
-            setTab('play');
-            setScreen({ name: 'start' });
-          }}
-        />
-      )}
-      {screen.name === 'intro' && (
-        <LessonIntroScreen lesson={screen.lesson} progress={progress} onStart={() => beginSession(screen.lesson.config, 'lesson', screen.lesson)} onBack={() => setScreen({ name: 'start' })} onCalibrate={() => setCalibrating(true)} />
-      )}
-      {screen.name === 'practice' && (
-        <PracticeScreen
-          key={screen.run}
-          config={screen.config}
-          options={options}
-          title={screen.lesson ? screen.lesson.title : TITLES[screen.source]}
-          onFinish={(result) => finishSession(result, screen.source, screen.lesson)}
-          onQuit={() => setScreen(screen.lesson ? { name: 'intro', lesson: screen.lesson } : { name: 'start' })}
-        />
-      )}
+      <LoadBoundary key={screen.name} onBack={() => setScreen({ name: 'start' })}>
+        <Suspense
+          fallback={
+            <div className="screen loading" role="status">
+              Loading the notation…
+            </div>
+          }
+        >
+          {screen.name === 'play' && (
+            <FreePlayScreen
+              initialPieceId={screen.pieceId}
+              keyboardSize={settings.keyboardSize}
+              keyLabels={settings.keyLabels === 'always'}
+              onBack={() => {
+                setTab('play');
+                setScreen({ name: 'start' });
+              }}
+            />
+          )}
+          {screen.name === 'intro' && (
+            <LessonIntroScreen lesson={screen.lesson} progress={progress} onStart={() => beginSession(screen.lesson.config, 'lesson', screen.lesson)} onBack={() => setScreen({ name: 'start' })} onCalibrate={() => setCalibrating(true)} />
+          )}
+          {screen.name === 'practice' && (
+            <PracticeScreen
+              key={screen.run}
+              config={screen.config}
+              options={options}
+              title={screen.lesson ? screen.lesson.title : TITLES[screen.source]}
+              onFinish={(result) => finishSession(result, screen.source, screen.lesson)}
+              onQuit={() => setScreen(screen.lesson ? { name: 'intro', lesson: screen.lesson } : { name: 'start' })}
+            />
+          )}
+        </Suspense>
+      </LoadBoundary>
       {screen.name === 'results' && (
         <ResultsScreen
           result={screen.result}

@@ -33,5 +33,18 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    // The engraving library and its embedded music font are one large, rarely
+    // changing chunk that only the notation screens need.
+    chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/vexflow')) return 'notation';
+          return undefined;
+        },
+      },
+    },
+  },
   server: { port: 5173 },
 });
