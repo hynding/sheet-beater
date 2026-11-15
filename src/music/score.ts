@@ -161,3 +161,23 @@ export function pieceRange(piece: Piece): { low: number; high: number } {
   }
   return { low, high };
 }
+
+export type PlayerHands = 'right' | 'left' | 'both';
+
+/**
+ * Splits a step for play-along: the pitches the player must supply, and the
+ * hands the app plays itself once they have.
+ */
+export function splitStep(step: Step, hands: PlayerHands): { want: number[]; auto: Clef[] } {
+  const treble = step.treble.map((n) => n.midi);
+  const bass = step.bass.map((n) => n.midi);
+  if (hands === 'both') return { want: [...new Set([...bass, ...treble])], auto: [] };
+  return hands === 'right' ? { want: treble, auto: ['bass'] } : { want: bass, auto: ['treble'] };
+}
+
+/** Index of the first step at or after a beat position. */
+export function stepIndexAt(steps: Step[], beat: number): number {
+  let i = 0;
+  while (i < steps.length && steps[i].beat < beat - 1e-9) i++;
+  return i;
+}

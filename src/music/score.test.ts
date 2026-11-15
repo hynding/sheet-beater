@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DURATION_BEATS } from './generator';
 import { PIECES } from './pieces';
-import { barPrompt, buildTimeline, parsePiece, pieceRange, totalBeats, type PieceDefinition } from './score';
+import { barPrompt, buildTimeline, parsePiece, pieceRange, splitStep, stepIndexAt, totalBeats, type PieceDefinition } from './score';
 
 const def = (patch: Partial<PieceDefinition>): PieceDefinition => ({
   id: 't',
@@ -84,5 +84,27 @@ describe('built-in pieces', () => {
     expect(bSharp).toMatchObject({ letter: 'B', accidental: '#', midi: 60 });
     const dNatural = moonlight.bars[2].treble[7].notes[0];
     expect(dNatural).toMatchObject({ letter: 'D', accidental: 'n', midi: 62 });
+  });
+});
+
+describe('play-along helpers', () => {
+  const piece = parsePiece(def({ treble: 'C4/h [D4,F4]/h | E4/w', bass: 'C3/q G3/q C3/h | r/wr' }));
+  const steps = buildTimeline(piece);
+
+  it('splits a step by the hand the player takes', () => {
+    expect(steps.map((s) => s.beat)).toEqual([0, 1, 2, 4]);
+    expect(splitStep(steps[0], 'right')).toEqual({ want: [60], auto: ['bass'] });
+    expect(splitStep(steps[0], 'left')).toEqual({ want: [48], auto: ['treble'] });
+    expect(splitStep(steps[0], 'both')).toEqual({ want: [48, 60], auto: [] });
+    expect(splitStep(steps[1], 'right').want).toEqual([]); // left-hand-only step plays itself
+    expect(splitStep(steps[2], 'right').want).toEqual([62, 65]);
+    expect(splitStep(steps[3], 'left').want).toEqual([]);
+  });
+
+  it('finds the step to resume from after a seek', () => {
+    expect(stepIndexAt(steps, 0)).toBe(0);
+    expect(stepIndexAt(steps, 0.5)).toBe(1);
+    expect(stepIndexAt(steps, 4)).toBe(3); // start of bar 2
+    expect(stepIndexAt(steps, 99)).toBe(4);
   });
 });

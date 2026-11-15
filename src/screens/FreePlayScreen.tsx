@@ -10,7 +10,7 @@ import { DURATION_BEATS } from '../music/generator';
 import { describeKey } from '../music/keys';
 import { ceilToB, floorToC, midiToName } from '../music/notes';
 import { PIECES } from '../music/pieces';
-import { barPrompt, pieceRange, type Piece } from '../music/score';
+import { barPrompt, pieceRange, type Piece, type PlayerHands } from '../music/score';
 
 interface FreePlayScreenProps {
   initialPieceId: string | null;
@@ -36,8 +36,9 @@ export function FreePlayScreen({ initialPieceId, keyboardSize, keyLabels, onBack
   const [mode, setMode] = useState<PlayerMode>('listen');
   const [tempoIndex, setTempoIndex] = useState(3);
   const [loop, setLoop] = useState(false);
+  const [hands, setHands] = useState<PlayerHands>('right');
   const piece: Piece | null = useMemo(() => PIECES.find((p) => p.id === pieceId) ?? null, [pieceId]);
-  const [player, controls] = usePlayerPiano(piece, mode, TEMPOS[tempoIndex], loop);
+  const [player, controls] = usePlayerPiano(piece, mode, TEMPOS[tempoIndex], loop, hands);
 
   const range = useMemo(() => {
     if (!piece) return { low: 36, high: 95 }; // C2..B6
@@ -63,11 +64,18 @@ export function FreePlayScreen({ initialPieceId, keyboardSize, keyLabels, onBack
     return h;
   }, [player.activeBass, player.activeTreble, player.expected]);
 
-  const bar = piece ? piece.bars[player.bar] : null;
-  const prompt = piece ? barPrompt(piece, player.bar) : null;
+  // The player resets a moment after the piece changes; until then its position
+  // may point past the end of a shorter piece.
+  const barIndex = piece ? Math.min(player.bar, piece.bars.length - 1) : 0;
+  const bar = piece ? piece.bars[barIndex] : null;
+  const prompt = piece ? barPrompt(piece, barIndex) : null;
+  // Read-ahead: the bar that follows, so eyes can move on before the hands do.
+  const nextBar = piece ? (barIndex + 1 < piece.bars.length ? barIndex + 1 : loop ? 0 : null) : null;
+  const nextPrompt = piece && nextBar !== null ? barPrompt(piece, nextBar) : null;
+  const listening = player.playing && mode === 'listen';
   const expectedBeat = mode === 'wait' && player.playing && player.expected.length ? player.beatInBar : null;
-  const trebleStates = bar ? eventStates(bar.treble, player.beatInBar, player.playing, expectedBeat) : [];
-  const bassStates = bar ? eventStates(bar.bass, player.beatInBar, player.playing && mode === 'listen', null) : [];
+  const trebleStates = bar ? eventStates(bar.treble, player.beatInBar, listening, hands !== 'left' ? expectedBeat : null) : [];
+  const bassStates = bar ? eventStates(bar.bass, player.beatInBar, listening, hands !== 'right' ? expectedBeat : null) : [];
   const keepVisible = [...player.activeTreble, ...player.activeBass, ...player.expected];
 
   const status = !piece
@@ -79,9 +87,9 @@ export function FreePlayScreen({ initialPieceId, keyboardSize, keyLabels, onBack
           ? player.expected.length
             ? `Play ${player.expected.map((m) => midiToName(m)).join(' + ')}`
             : 'Listen…'
-          : `Bar ${player.bar + 1} of ${piece.bars.length}`
+          : 'Playing'
         : mode === 'wait'
-          ? 'Press play, then play the highlighted keys. The left hand follows you.'
+          ? `Press play, then play the highlighted keys. ${hands === 'both' ? 'Both hands are yours.' : `The ${hands === 'right' ? 'left' : 'right'} hand follows you.`}`
           : 'Press play to hear it with the keys lit up.';
 
   return (
@@ -90,6 +98,22 @@ export function FreePlayScreen({ initialPieceId, keyboardSize, keyLabels, onBack
         <button type="button" className="btn btn--ghost" onClick={onBack} aria-label="Back">
           ✕
         </button>
+        {piece && (
+          <div className="transport">
+            {player.playing ? (
+              <button type="button" className="btn btn--primary" onClick={controls.pause} aria-label="Pause">
+                ❚❚
+              </button>
+            ) : (
+              <button type="button" className="btn btn--primary" onClick={controls.play} aria-label="Play">
+                ▶
+              </button>
+            )}
+            <button type="button" className="btn" onClick={controls.stop} aria-label="Stop" disabled={!player.playing && player.beat === 0}>
+              ■
+            </button>
+          </div>
+        )}
         <select className="hud__select" value={pieceId} onChange={(e) => setPieceId(e.target.value)} aria-label="Piece">
           <option value="">Just the piano</option>
           {PIECES.map((p) => (
@@ -108,43 +132,62 @@ export function FreePlayScreen({ initialPieceId, keyboardSize, keyLabels, onBack
                 Play along
               </button>
             </div>
+            {mode === 'wait' && (
+              <select className="hud__select hud__select--small" value={hands} onChange={(e) => setHands(e.target.value as PlayerHands)} aria-label="Hands to play">
+                <option value="right">Right hand</option>
+                <option value="left">Left hand</option>
+                <option value="both">Both hands</option>
+              </select>
+            )}
             <label className="hud__tempo">
-              <span className="muted small">Tempo {Math.round(piece.tempo * TEMPOS[tempoIndex])}</span>
+              <span className="muted small">{Math.round(piece.tempo * TEMPOS[tempoIndex])} bpm</span>
               <input type="range" min={0} max={TEMPOS.length - 1} value={tempoIndex} onChange={(e) => setTempoIndex(Number(e.target.value))} aria-label="Tempo" />
             </label>
-            <label className="field--row small muted">
-              <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} /> Loop
-            </label>
-            <div className="transport">
-              {player.playing ? (
-                <button type="button" className="btn btn--primary" onClick={controls.pause} aria-label="Pause">
-                  ❚❚
-                </button>
-              ) : (
-                <button type="button" className="btn btn--primary" onClick={controls.play} aria-label="Play">
-                  ▶
-                </button>
-              )}
-              <button type="button" className="btn" onClick={controls.stop} aria-label="Stop" disabled={!player.playing && player.beat === 0}>
-                ■
-              </button>
-            </div>
           </>
         )}
         <span className="hud__hint muted small">Keys from {midiToName(baseMidi)}</span>
       </header>
 
-      <div className="practice__staff">
+      <div className="practice__staff freeplay__stage">
         {piece && prompt ? (
-          <Staff clefMode="grand" prompt={prompt} states={trebleStates} secondaryStates={bassStates} playheadBeat={player.playing && mode === 'listen' ? player.beatInBar : expectedBeat} />
+          <div className="score">
+            <div className="score__now">
+              <Staff clefMode="grand" prompt={prompt} states={trebleStates} secondaryStates={bassStates} playheadBeat={listening ? player.beatInBar : expectedBeat} />
+            </div>
+            <div className="score__next" aria-hidden="true">
+              <span className="score__label">{nextPrompt ? 'Next' : 'End'}</span>
+              {nextPrompt && <Staff clefMode="grand" prompt={nextPrompt} />}
+            </div>
+          </div>
         ) : (
           <div className="freeplay__empty">
             <h2>Free play</h2>
             <p className="muted">Every key sounds. Choose a piece above to watch the player piano, or to play along with it.</p>
           </div>
         )}
-        <div className="instruction muted small">
-          {piece ? [piece.title, piece.keyLabel ?? (piece.key !== 'C' ? describeKey(piece.key) : null), status].filter(Boolean).join(' · ') : status}
+        <div className="freeplay__bar muted small">
+          <span className="freeplay__status">{piece ? [piece.title, piece.keyLabel ?? (piece.key !== 'C' ? describeKey(piece.key) : null), status].filter(Boolean).join(' · ') : status}</span>
+          {piece && (
+            <label className="freeplay__loop">
+              <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} /> Loop
+            </label>
+          )}
+          {piece && (
+            <label className="freeplay__seek">
+              <input
+                type="range"
+                min={1}
+                max={piece.bars.length}
+                value={barIndex + 1}
+                onChange={(e) => controls.seek(Number(e.target.value) - 1)}
+                aria-label="Bar"
+                aria-valuetext={`Bar ${barIndex + 1} of ${piece.bars.length}`}
+              />
+              <span className="freeplay__barcount">
+                Bar {barIndex + 1} / {piece.bars.length}
+              </span>
+            </label>
+          )}
         </div>
       </div>
 
