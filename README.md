@@ -35,6 +35,10 @@ Runs in any modern browser (desktop or mobile, designed for landscape) and ships
 - Results screen with accuracy, response times (or on-the-beat precision for rhythm), best streak, weakest notes, every miss, stars earned and a one-tap "next lesson" or "try the next level".
 - Installable PWA with a landscape manifest; settings persist between visits.
 
+## Loading and bundle
+
+The start screen ships in a small startup bundle (about 96 kB gzipped). The engraving library and its music font (about 390 kB gzipped) live in a separate `notation` chunk that is fetched in the background once the start screen has painted, and on demand if a notation screen is opened first. The service worker precaches both, so repeat visits and the installed app load from cache. On a simulated slow phone connection the start screen became usable in about a third of the time it took before the split.
+
 ## Getting started
 
 ```bash

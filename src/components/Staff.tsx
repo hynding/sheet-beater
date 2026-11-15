@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Accidental, Annotation, Beam, Dot, Formatter, Fraction, ModifierContext, Renderer, Stave, StaveConnector, StaveNote, TickContext, Voice } from 'vexflow/bravura';
 import type { ClefMode } from '../music/difficulty';
 import { DURATION_BEATS, labelFor, type Prompt } from '../music/generator';
@@ -39,6 +39,21 @@ interface Layout {
 }
 
 /**
+ * Resolves once the music font can be measured. The engraving library sizes
+ * glyphs by measuring text, so drawing before the font has finished decoding
+ * would lay notes out with the wrong widths.
+ */
+let musicFont: Promise<void> | null = null;
+function musicFontReady(): Promise<void> {
+  if (!musicFont) {
+    const loading = typeof document !== 'undefined' && document.fonts ? document.fonts.load('30px Bravura').then(() => undefined) : Promise.resolve();
+    // Never block the staff for long if the font cannot be confirmed.
+    musicFont = Promise.race([loading.catch(() => undefined), new Promise<void>((resolve) => setTimeout(resolve, 1500))]);
+  }
+  return musicFont;
+}
+
+/**
  * Draws one prompt (a note, a chord, a phrase or a bar) on a treble, bass or
  * grand staff with VexFlow. Re-renders from scratch on every change.
  */
@@ -49,10 +64,21 @@ export function Staff({ clefMode, prompt, states = [], secondaryStates = [], lab
   const layoutRef = useRef<Layout | null>(null);
   const { width, height } = useElementSize(containerRef);
   const stateKey = `${states.join(',')}|${secondaryStates.join(',')}`;
+  const [fontReady, setFontReady] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void musicFontReady().then(() => {
+      if (alive) setFontReady(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
-    if (!host || width === 0 || height === 0) return;
+    if (!host || !fontReady || width === 0 || height === 0) return;
     host.replaceChildren();
     layoutRef.current = null;
 
@@ -162,7 +188,7 @@ export function Staff({ clefMode, prompt, states = [], secondaryStates = [], lab
       scale,
       points: [...prompt.events.map((e, i) => ({ beat: e.beat, x: notes[i].getAbsoluteX() })), { beat: totalBeats, x: noteEnd }],
     };
-  }, [clefMode, prompt, stateKey, labels, width, height]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [clefMode, prompt, stateKey, labels, width, height, fontReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Move the playhead without re-rendering the notation.
   useEffect(() => {
@@ -187,7 +213,7 @@ export function Staff({ clefMode, prompt, states = [], secondaryStates = [], lab
     }
     el.style.display = 'block';
     el.style.transform = `translateX(${x * layout.scale}px)`;
-  }, [playheadBeat, width, height, prompt]);
+  }, [playheadBeat, width, height, prompt, fontReady]);
 
   const label = prompt ? `${prompt.mode === 'chord' ? 'Chord' : prompt.mode === 'single' ? 'Note' : 'Phrase'} on the ${prompt.clef} staff` : 'Empty staff';
   return (
