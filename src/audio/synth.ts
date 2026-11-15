@@ -21,6 +21,18 @@ class Synth {
     return ctx ? ctx.currentTime : performance.now() / 1000;
   }
 
+  /**
+   * Seconds between scheduling a sound and it leaving the speaker, as far as
+   * the browser can tell. Bluetooth and some Android devices report far more
+   * than a wired laptop; a few browsers report nothing, which reads as 0.
+   */
+  outputLatency(): number {
+    const ctx = this.ensure();
+    if (!ctx) return 0;
+    const reported = (ctx.outputLatency || 0) + (ctx.baseLatency || 0);
+    return Number.isFinite(reported) ? Math.max(0, Math.min(0.5, reported)) : 0;
+  }
+
   private ensure(): AudioContext | null {
     if (this.ctx) return this.ctx;
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;

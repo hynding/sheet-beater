@@ -8,7 +8,7 @@ import type { KeyLabelMode, KeyboardSize, SessionConfig } from '../music/difficu
 import { eventLabel, generatePrompts, keyboardRangeFor, type Prompt } from '../music/generator';
 import { describeKey } from '../music/keys';
 import { midiToName } from '../music/notes';
-import { TIMING, chordProgress, isOnTime, judgeTiming, type Timing } from '../state/judge';
+import { TIMING_WINDOWS, chordProgress, isOnTime, judgeTiming, missDeadline, nearestEvent, type Timing, type TimingStrictness } from '../state/judge';
 import { retryBudget, scheduleRetry } from '../state/retry';
 import type { Answer, SessionResult } from '../state/session';
 
@@ -16,6 +16,9 @@ export interface PracticeOptions {
   sound: boolean;
   keyLabels: KeyLabelMode;
   keyboardSize: KeyboardSize;
+  timingStrictness: TimingStrictness;
+  /** Calibrated tap lag in ms, or null to use the browser's reported output latency. */
+  timingOffsetMs: number | null;
 }
 
 interface PracticeScreenProps {
@@ -44,6 +47,12 @@ interface RhythmClock {
   secondsPerBeat: number;
   beatsPerBar: number;
   judged: boolean[];
+  /**
+   * Seconds the player's perception and input trail the audio clock. Subtracted
+   * from "now" wherever the bar position is read, so judging and the cursor
+   * follow what is heard rather than what was scheduled.
+   */
+  lag: number;
   /** Cancels any clicks still scheduled (used when quitting mid-bar). */
   stops: Array<() => void>;
 }
@@ -75,6 +84,7 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
   const prompt: Prompt | null = prompts[index] ?? null;
   const finished = index >= prompts.length;
   const isRhythm = config.mode === 'rhythm';
+  const windows = TIMING_WINDOWS[options.timingStrictness];
 
   const setPhaseBoth = (p: Phase) => {
     phaseRef.current = p;
@@ -128,7 +138,8 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
     const barStart = t0 + beatsPerBar * secondsPerBeat;
     const stops: Array<() => void> = [];
     for (let i = 0; i < beatsPerBar * 2; i++) stops.push(synth.clickAt(t0 + i * secondsPerBeat, i % beatsPerBar === 0));
-    clock.current = { t0, barStart, secondsPerBeat, beatsPerBar, judged: prompt.events.map((e) => e.rest), stops };
+    const lag = options.timingOffsetMs !== null ? options.timingOffsetMs / 1000 : synth.outputLatency();
+    clock.current = { t0, barStart, secondsPerBeat, beatsPerBar, judged: prompt.events.map((e) => e.rest), lag, stops };
     setPhaseBoth('countIn');
     setBeat(null);
     setCountIn(1);
@@ -142,7 +153,7 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
     const tick = () => {
       const c = clock.current;
       if (!c) return;
-      const now = synth.now();
+      const now = synth.now() - c.lag;
       if (now < c.barStart) {
         setCountIn(Math.max(1, Math.min(c.beatsPerBar, Math.floor((now - c.t0) / c.secondsPerBeat) + 1)));
         raf.current = requestAnimationFrame(tick);
@@ -155,18 +166,20 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
       }
       const beatNow = (now - c.barStart) / c.secondsPerBeat;
       setBeat(beatNow);
-      // Notes whose window has closed without a press are misses.
+      // A note is given up on once a press would belong to the next note instead.
+      const onsets = prompt.events.map((ev) => c.barStart + ev.beat * c.secondsPerBeat);
+      const playable = prompt.events.map((ev) => !ev.rest);
+      const barEnd = c.barStart + c.beatsPerBar * c.secondsPerBeat;
       prompt.events.forEach((e, i) => {
         if (c.judged[i]) return;
-        const expected = c.barStart + e.beat * c.secondsPerBeat;
-        if (now > expected + TIMING.good / 1000) {
+        if (now > missDeadline(onsets, playable, i, barEnd, windows.good / 1000)) {
           c.judged[i] = true;
           record(prompt, i, [], false, 'miss');
           setStates((s) => s.map((v, j) => (j === i ? 'wrong' : v)));
           setMistakeKeys((prev) => new Set(prev).add(e.notes[0].midi));
         }
       });
-      if (beatNow >= c.beatsPerBar + TIMING.good / 1000 / c.secondsPerBeat) {
+      if (beatNow >= c.beatsPerBar + windows.good / 1000 / c.secondsPerBeat) {
         setPhaseBoth('feedback');
         setBeat(c.beatsPerBar);
         later(advancePrompt, BAR_END_DELAY_MS);
@@ -223,13 +236,25 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit }: Pra
 
       if (isRhythm) {
         const c = clock.current;
-        if (!c || phaseNow !== 'playing') return;
-        const ei = p.events.findIndex((_, i) => !c.judged[i]);
+        if (!c || (phaseNow !== 'playing' && phaseNow !== 'countIn')) return;
+        const now = synth.now() - c.lag;
+        // The screen flips from count-in to playing on an animation frame, so a
+        // first note played on or just ahead of the beat arrives during the
+        // count-in. Accept it once it is within reach of the bar; anything
+        // earlier is the player tapping along with the count.
+        if (now < c.barStart - windows.good / 1000) return;
+        // A press more than half a beat (or the timing window, if wider) from every
+        // remaining note is a stray tap: it is ignored rather than spent on the next note.
+        const ei = nearestEvent(
+          p.events.map((ev) => c.barStart + ev.beat * c.secondsPerBeat),
+          c.judged,
+          now,
+          Math.max(windows.good / 1000, c.secondsPerBeat / 2),
+        );
         if (ei === -1) return;
         const e = p.events[ei];
-        const now = synth.now();
         const expected = c.barStart + e.beat * c.secondsPerBeat;
-        const timing = judgeTiming((now - expected) * 1000);
+        const timing = judgeTiming((now - expected) * 1000, windows);
         const pitchOk = midi === e.notes[0].midi;
         const correct = pitchOk && isOnTime(timing);
         c.judged[ei] = true;

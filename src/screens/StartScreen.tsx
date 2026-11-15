@@ -42,6 +42,7 @@ interface StartScreenProps {
   history: History;
   mastery: Mastery;
   onResetProgress: () => void;
+  onCalibrate: () => void;
   midi: MidiStatus;
 }
 
@@ -54,7 +55,7 @@ function toggle<T>(list: T[], item: T, min = 1): T[] {
   return [...list, item];
 }
 
-export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progress, onSelectLesson, weakNotes, onPracticeWeak, onFreePlay, history, mastery, onResetProgress, midi }: StartScreenProps) {
+export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progress, onSelectLesson, weakNotes, onPracticeWeak, onFreePlay, history, mastery, onResetProgress, onCalibrate, midi }: StartScreenProps) {
   const [showCustom, setShowCustom] = useState(settings.preset === 'custom');
   const range = keyboardRangeFor(settings);
   const activePreset = PRESETS.find((p) => p.id === settings.preset);
@@ -347,6 +348,20 @@ export function StartScreen({ tab, onTab, settings, onChange, onStartFree, progr
                     <option value="large">Large</option>
                   </select>
                 </label>
+                <label className="field">
+                  <span>Rhythm timing</span>
+                  <select value={settings.timingStrictness} onChange={(e) => update({ timingStrictness: e.target.value as Settings['timingStrictness'] })}>
+                    <option value="relaxed">Relaxed</option>
+                    <option value="normal">Normal</option>
+                    <option value="strict">Strict</option>
+                  </select>
+                </label>
+                <div className="field">
+                  <span>Device delay: {settings.timingOffsetMs === null ? 'automatic' : `${settings.timingOffsetMs} ms`}</span>
+                  <button type="button" className="btn btn--field" onClick={onCalibrate}>
+                    Calibrate…
+                  </button>
+                </div>
                 <label className="field field--row">
                   <input type="checkbox" checked={settings.sound} onChange={(e) => update({ sound: e.target.checked })} />
                   <span>Play sounds</span>

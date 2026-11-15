@@ -19,6 +19,7 @@ interface ResultsScreenProps {
   onPlayAgain: () => void;
   onNext?: () => void;
   onLevelUp?: (preset: PresetId) => void;
+  onCalibrate: () => void;
   onBack: () => void;
 }
 
@@ -26,7 +27,7 @@ function formatSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)} s`;
 }
 
-export function ResultsScreen({ result, lesson, stars, improved, nextLesson, presetId, backLabel, onPlayAgain, onNext, onLevelUp, onBack }: ResultsScreenProps) {
+export function ResultsScreen({ result, lesson, stars, improved, nextLesson, presetId, backLabel, onPlayAgain, onNext, onLevelUp, onCalibrate, onBack }: ResultsScreenProps) {
   const s = useMemo(() => summarize(result), [result]);
   const pct = Math.round(s.accuracy * 100);
   const isRhythm = result.config.mode === 'rhythm';
@@ -50,6 +51,10 @@ export function ResultsScreen({ result, lesson, stars, improved, nextLesson, pre
           : 'Keep practicing';
   const unitLabel = result.config.mode === 'chord' ? 'chords' : result.config.mode === 'rhythm' ? 'notes in time' : 'notes';
   const timed = s.timing.perfect + s.timing.good + s.timing.early + s.timing.late + s.timing.miss;
+  // Timing misses that all fall on one side usually mean device delay, not the player.
+  // (The side itself is not reported: a very late note is scored as early for the next one.)
+  const offBeat = s.timing.early + s.timing.late;
+  const skewed = isRhythm && offBeat >= 4 && Math.max(s.timing.early, s.timing.late) >= offBeat * 0.8;
 
   return (
     <div className="screen results">
@@ -125,6 +130,14 @@ export function ResultsScreen({ result, lesson, stars, improved, nextLesson, pre
                 </li>
               ))}
             </ul>
+          )}
+          {skewed && (
+            <p className="tip small">
+              Your timing misses were nearly all off in the same direction. If you felt on the beat, your device may be adding delay.{' '}
+              <button type="button" className="link" onClick={onCalibrate}>
+                Calibrate timing
+              </button>
+            </p>
           )}
           {weakNotes.length > 0 && !isRhythm && <p className="muted small">These will come up more often until they stick.</p>}
           {s.missed.length > 0 && (

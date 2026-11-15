@@ -11,6 +11,7 @@ interface LessonIntroScreenProps {
   progress: Progress;
   onStart: () => void;
   onBack: () => void;
+  onCalibrate: () => void;
 }
 
 function describeConfig(lesson: Lesson): string {
@@ -23,7 +24,7 @@ function describeConfig(lesson: Lesson): string {
   return `${what} on the ${where}${keys}${timed}.`;
 }
 
-export function LessonIntroScreen({ lesson, progress, onStart, onBack }: LessonIntroScreenProps) {
+export function LessonIntroScreen({ lesson, progress, onStart, onBack, onCalibrate }: LessonIntroScreenProps) {
   const unit = unitOf(lesson);
   const preview = useMemo(() => (lesson.preview ? promptFromNames(lesson.preview.clef, lesson.preview.notes, lesson.preview.key) : null), [lesson]);
   const done = progress[lesson.id];
@@ -64,6 +65,11 @@ export function LessonIntroScreen({ lesson, progress, onStart, onBack }: LessonI
         </div>
       </div>
       <footer className="intro__footer">
+        {lesson.config.mode === 'rhythm' && (
+          <button type="button" className="btn btn--ghost" onClick={onCalibrate}>
+            Calibrate timing
+          </button>
+        )}
         <button type="button" className="btn btn--primary btn--big" onClick={onStart}>
           {done ? 'Play again' : 'Start lesson'}
         </button>
