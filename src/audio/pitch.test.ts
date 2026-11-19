@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { midiToFrequency } from '../music/notes';
-import { analyseFrame, createNoteTracker, detectPitch, freqToMidi, micSearchRange, rms } from './pitch';
+import realPiano from './fixtures/real-piano-frames.json';
+import { analyseFrame, createNoteTracker, detectPitch, freqToMidi, hopPeaks, micSearchRange, rms } from './pitch';
 
 const SR = 48000;
 
@@ -61,7 +62,8 @@ describe('analyseFrame', () => {
     expect(analyseFrame(tone(midiToFrequency(60)), SR, 60, 2200).midi).toBe(60);
     const between = midiToFrequency(60) * Math.pow(2, 0.5 / 12);
     expect(analyseFrame(tone(between), SR, 60, 2200).midi).toBeNull();
-    expect(analyseFrame(tone(midiToFrequency(60), { amp: 0.002 }), SR, 60, 2200).midi).toBeNull();
+    expect(analyseFrame(tone(midiToFrequency(60), { amp: 0.0005 }), SR, 60, 2200).midi).toBeNull(); // near silence
+    expect(analyseFrame(tone(midiToFrequency(60), { amp: 0.01 }), SR, 60, 2200).midi).toBe(60); // quiet playing is the tracker's call
     expect(analyseFrame(tone(300, { harmonics: [], noise: 0.3 }), SR, 60, 2200).midi).toBeNull();
   });
 
@@ -75,8 +77,8 @@ describe('analyseFrame', () => {
 });
 
 describe('note tracker', () => {
-  const f = (midi: number | null, level = 0.1) => ({ midi, rms: level });
-  const fired = (frames: Array<{ midi: number | null; rms: number }>, t = createNoteTracker()) => frames.map((x) => t.push(x)).filter((x) => x !== null);
+  const f = (midi: number | null, level = 0.1, clarity = 0.99) => ({ midi, rms: level, clarity });
+  const fired = (frames: Array<{ midi: number | null; rms: number; clarity?: number }>, t = createNoteTracker()) => frames.map((x) => t.push(x)).filter((x) => x !== null);
 
   it('fires once per steadily heard note', () => {
     const t = createNoteTracker();
@@ -95,8 +97,11 @@ describe('note tracker', () => {
     expect(fired([f(60, 0.03), f(60, 0.08), f(60, 0.15), f(60, 0.2), f(60, 0.22), f(60, 0.2), f(60, 0.17), f(60, 0.15)])).toEqual([60]);
   });
 
-  it('does not fire again while a note rings or swells slightly', () => {
+  it('does not fire again while a note rings, swells or beats', () => {
     expect(fired([f(60, 0.2), f(60, 0.2), f(60, 0.2), f(60, 0.15), f(60, 0.1), f(60, 0.07), f(60, 0.09), f(60, 0.1), f(60, 0.08)])).toEqual([60]);
+    // Beating: the level drops to 40% and comes back, again and again, without passing its earlier peaks.
+    const beating = Array.from({ length: 60 }, (_, i) => f(60, 0.2 * Math.exp(-i / 60) * (0.7 + 0.3 * Math.cos(i / 2.5))));
+    expect(fired(beating)).toEqual([60]);
   });
 
   it('hears the same key struck again after a gap of any length', () => {
@@ -106,14 +111,56 @@ describe('note tracker', () => {
     }
   });
 
-  it('hears an undamped re-strike exactly once', () => {
-    const frames = [0.2, 0.2, 0.2, 0.18, 0.15, 0.12, 0.1, 0.09, 0.14, 0.2, 0.22, 0.2, 0.18, 0.16, 0.14].map((l) => f(60, l));
+  it('hears a re-strike on a ringing note exactly once', () => {
+    const frames = [0.2, 0.2, 0.2, 0.18, 0.15, 0.12, 0.1, 0.09, 0.16, 0.27, 0.28, 0.26, 0.23, 0.2, 0.18].map((l) => f(60, l));
     expect(fired(frames)).toEqual([60, 60]);
   });
 
-  it('treats quiet frames as silence', () => {
+  it('credits a strike to the note that follows it, not the one it ended', () => {
+    // A new key is struck (level jumps) but the window still reads the old note for two frames.
+    const frames = [f(60, 0.1), f(60, 0.1), f(60, 0.1), f(60, 0.08), f(60, 0.07), f(60, 0.06), f(60, 0.14), f(60, 0.16), f(62, 0.16), f(62, 0.15), f(62, 0.14), f(62, 0.13)];
+    expect(fired(frames)).toEqual([60, 62]);
+  });
+
+  it('ignores an unclean flip to an unrelated pitch unless it lasts', () => {
+    const ringing = [f(36, 0.2, 0.92), f(36, 0.2, 0.92), f(36, 0.2, 0.92), f(36, 0.18, 0.92), f(36, 0.16, 0.92), f(36, 0.15, 0.92)];
+    const stray = (n: number) => Array.from({ length: n }, () => f(58, 0.14, 0.86));
+    expect(fired([...ringing, ...stray(3), f(36, 0.13, 0.92), f(36, 0.13, 0.92), f(36, 0.13, 0.92)])).toEqual([36]);
+    expect(fired([...ringing, ...stray(9)])).toEqual([36, 58]);
+    // A clean change of pitch needs no strike: legato at an even level.
+    expect(fired([...ringing, f(40, 0.14, 0.97), f(40, 0.14, 0.97), f(40, 0.14, 0.97)])).toEqual([36, 40]);
+  });
+
+  it('ignores a brief flip to an overtone but hears a real octave leap', () => {
+    const ringing = [f(48, 0.2), f(48, 0.2), f(48, 0.2), f(48, 0.18), f(48, 0.16), f(48, 0.15)];
+    const flip = Array.from({ length: 5 }, (_, i) => f(60, 0.14 - i * 0.004, 0.86)); // unclear, no strike
+    expect(fired([...ringing, ...flip, f(48, 0.11), f(48, 0.1), f(48, 0.1)])).toEqual([48]);
+    const leap = Array.from({ length: 8 }, (_, i) => f(60, 0.14 - i * 0.004, 0.98)); // clean and lasting
+    expect(fired([...ringing, ...leap])).toEqual([48, 60]);
+  });
+
+  it('follows the room: quiet playing is heard in a quiet room, and noise is gated in a loud one', () => {
+    expect(fired([f(null, 0.0004), f(null, 0.0004), f(60, 0.004), f(60, 0.004), f(60, 0.004)])).toEqual([60]);
+    const loudRoom = Array.from({ length: 6 }, () => f(null, 0.004));
+    expect(fired([...loudRoom, f(60, 0.006), f(60, 0.006), f(60, 0.006), f(60, 0.006)])).toEqual([]);
+    expect(fired([...loudRoom, f(60, 0.03), f(60, 0.03), f(60, 0.03)])).toEqual([60]);
     expect(fired([f(60, 0.001), f(60, 0.001), f(60, 0.001), f(60, 0.001)])).toEqual([]);
   });
+});
+
+describe('note tracker on real piano recordings', () => {
+  // Frame traces measured from recordings of a Steinway and a Yamaha grand; see the fixture's "about".
+  for (const fixture of realPiano.fixtures) {
+    it(fixture.name, () => {
+      const tracker = createNoteTracker();
+      const heard: number[] = [];
+      for (const [midi, level, clarity, p0, p1] of fixture.frames as Array<[number | null, number, number, number, number]>) {
+        const on = tracker.push({ midi, rms: level, clarity, peaks: [p0, p1] });
+        if (on !== null) heard.push(on);
+      }
+      expect(heard).toEqual(fixture.want);
+    });
+  }
 });
 
 /** Two strikes of the same note with a damped gap between them, as one long signal. */
@@ -155,12 +202,24 @@ describe('repeated notes through the whole analysis chain', () => {
         const tracker = createNoteTracker();
         const onsets: number[] = [];
         for (let end = WINDOW + offset; end <= signal.length; end += HOP) {
-          const on = tracker.push(analyseFrame(signal.subarray(end - WINDOW, end), SR, minFreq, maxFreq));
+          const on = tracker.push(analyseFrame(signal.subarray(end - WINDOW, end), SR, minFreq, maxFreq, HOP));
           if (on !== null) onsets.push(on);
         }
         expect(onsets, `gap ${gapSec * 1000} ms, offset ${offset}`).toEqual([67, 67]);
       }
     }
+  });
+});
+
+describe('hopPeaks', () => {
+  it('measures the two halves of the newest audio separately', () => {
+    const buf = new Float32Array(4096);
+    buf[4096 - 1000] = 0.5; // in the older half of the last 1584 samples
+    buf[4096 - 10] = -0.2; // in the newest half
+    buf[100] = 0.9; // long ago: ignored
+    expect(hopPeaks(buf, 1584)).toEqual([0.5, expect.closeTo(0.2, 5)]);
+    expect(analyseFrame(buf, SR, 60, 4400, 1584).peaks).toEqual([0.5, expect.closeTo(0.2, 5)]);
+    expect(analyseFrame(buf, SR, 60, 4400).peaks).toBeUndefined();
   });
 });
 
