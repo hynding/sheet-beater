@@ -68,6 +68,7 @@ export function useMicInput(onNoteOn: (midi: number, delayMs: number) => void, e
         const buf = new Float32Array(FFT_SIZE);
         const tracker = createNoteTracker();
         const delay = micDelayMs(ctx.sampleRate);
+        const hop = Math.round((FRAME_MS / 1000) * ctx.sampleRate);
         const { minFreq, maxFreq, lowest, highest } = micSearchRange(low, high);
         let shown: number | null = null;
         setStatus({ state: 'listening', note: null, delayMs: delay });
@@ -75,9 +76,9 @@ export function useMicInput(onNoteOn: (midi: number, delayMs: number) => void, e
         timer = window.setInterval(() => {
           if (!ctx) return;
           analyser.getFloatTimeDomainData(buf);
-          const frame = analyseFrame(buf, ctx.sampleRate, minFreq, maxFreq);
+          const frame = analyseFrame(buf, ctx.sampleRate, minFreq, maxFreq, hop);
           const inRange = frame.midi !== null && frame.midi >= lowest && frame.midi <= highest;
-          const on = tracker.push(inRange ? frame : { midi: null, rms: frame.rms });
+          const on = tracker.push(inRange ? frame : { ...frame, midi: null });
           if (on !== null) handler.current(on, delay);
           if (tracker.current !== shown) {
             shown = tracker.current;
