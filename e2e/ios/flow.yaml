@@ -3,6 +3,9 @@
 # Steps marked optional record what happened without stopping the run; the assertions at the end decide the result.
 appId: com.sheetbeater.app
 ---
+# The app is landscape only. A simulator starts "held" upright, where the app draws sideways and
+# taps aimed at landscape positions land elsewhere, so turn the device the way a player would.
+- setOrientation: LANDSCAPE_LEFT
 - extendedWaitUntil:
     visible: "Free play"
     timeout: 180000
