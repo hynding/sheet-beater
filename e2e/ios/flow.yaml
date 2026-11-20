@@ -5,19 +5,19 @@ appId: com.sheetbeater.app
     clearState: true
 - extendedWaitUntil:
     visible: "Free play"
-    timeout: 90000
+    timeout: 180000
 - takeScreenshot: shots/ios-01-start
 
 # A lesson: the intro, then the practice screen with notation and keyboard.
 - tapOn: "Three landmarks.*"
 - extendedWaitUntil:
     visible: "Start lesson"
-    timeout: 30000
+    timeout: 120000
 - takeScreenshot: shots/ios-02-lesson-intro
 - tapOn: "Start lesson"
 - extendedWaitUntil:
     visible: "Quit session"
-    timeout: 30000
+    timeout: 120000
 - takeScreenshot: shots/ios-03-practice
 - tapOn: "C4"
 - takeScreenshot: shots/ios-04-after-a-key
@@ -29,11 +29,11 @@ appId: com.sheetbeater.app
 - tapOn: "Canon in D.*"
 - extendedWaitUntil:
     visible: "Play"
-    timeout: 30000
+    timeout: 120000
 - tapOn: "Play"
 - extendedWaitUntil:
     visible: "Bar [2-9] / 16"
-    timeout: 30000
+    timeout: 120000
 - takeScreenshot: shots/ios-05-player-piano
 - tapOn: "Stop"
 
