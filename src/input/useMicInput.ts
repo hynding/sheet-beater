@@ -123,3 +123,14 @@ export function micLabel(status: MicStatus, name: (midi: number) => string): str
       return 'Mic error';
   }
 }
+
+/**
+ * The accessible name of the microphone switch. The switch shows its state as text inside the
+ * button, which a screen reader would never read once the button has a fixed label, so the state
+ * goes into the label. The heard note is left out: it changes several times a second.
+ */
+export function micButtonLabel(on: boolean, status: MicStatus): string {
+  if (!on || status.state === 'off') return 'Microphone input';
+  if (status.state === 'listening') return 'Microphone input: listening';
+  return `Microphone input: ${micLabel(status, String)}`;
+}

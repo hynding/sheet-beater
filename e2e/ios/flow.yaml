@@ -20,8 +20,7 @@ appId: com.sheetbeater.app
 - tapOn: "Start lesson"
 - extendedWaitUntil:
     visible: "Quit session"
-    timeout: 30000
-    optional: true
+    timeout: 60000
 - takeScreenshot: shots/ios-03-practice
 - tapOn:
     text: "Quit session"
@@ -35,8 +34,7 @@ appId: com.sheetbeater.app
 - tapOn: "Start"
 - extendedWaitUntil:
     visible: "Quit session"
-    timeout: 30000
-    optional: true
+    timeout: 60000
 - takeScreenshot: shots/ios-04-free-practice
 - tapOn:
     text: "Quit session"
@@ -48,15 +46,11 @@ appId: com.sheetbeater.app
 - extendedWaitUntil:
     visible: "Play"
     timeout: 60000
-    optional: true
 - takeScreenshot: shots/ios-05-free-play
-- tapOn:
-    text: "Play"
-    optional: true
+- tapOn: "Play"
 - extendedWaitUntil:
-    visible: "Bar [2-9] / 16"
+    visible: "Bar [2-9] of 16"
     timeout: 60000
-    optional: true
 - takeScreenshot: shots/ios-06-player-piano
 - tapOn:
     text: "Stop"
@@ -75,10 +69,13 @@ appId: com.sheetbeater.app
     text: "Allow|OK"
     optional: true
 - extendedWaitUntil:
-    visible: "Listening|Hearing .*"
+    visible: "Microphone input: listening"
     timeout: 20000
     optional: true
 - takeScreenshot: shots/ios-08-mic-status
+- tapOn:
+    text: "Microphone input.*"
+    optional: true
 - tapOn:
     text: "Back"
     optional: true

@@ -4,7 +4,7 @@ import { usePlayerPiano, type PlayerMode } from '../audio/usePlayerPiano';
 import { Piano, type KeyHighlight } from '../components/Piano';
 import { Staff, type EventState } from '../components/Staff';
 import { useComputerKeyboard } from '../input/useComputerKeyboard';
-import { micLabel, useMicInput } from '../input/useMicInput';
+import { micButtonLabel, micLabel, useMicInput } from '../input/useMicInput';
 import { useMidiInput } from '../input/useMidiInput';
 import type { KeyboardSize } from '../music/difficulty';
 import { DURATION_BEATS } from '../music/generator';
@@ -173,7 +173,7 @@ export function FreePlayScreen({ initialPieceId, keyboardSize, keyLabels, micInp
         )}
         <div className="freeplay__bar muted small">
           <span className="freeplay__status">{piece ? [piece.title, piece.keyLabel ?? (piece.key !== 'C' ? describeKey(piece.key) : null), status].filter(Boolean).join(' · ') : status}</span>
-          <button type="button" className={`btn btn--ghost mic mic--${mic.state}`} onClick={onToggleMic} aria-pressed={micInput} aria-label="Microphone input" title="Listen for a real piano through the microphone">
+          <button type="button" className={`btn btn--ghost mic mic--${mic.state}`} onClick={onToggleMic} aria-pressed={micInput} aria-label={micButtonLabel(micInput, mic)} title="Listen for a real piano through the microphone">
             <span aria-hidden="true">🎤</span>
             {micInput && <span className="mic__note">{micLabel(mic, (m) => midiToName(m))}</span>}
           </button>

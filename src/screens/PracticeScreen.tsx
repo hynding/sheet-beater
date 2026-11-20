@@ -3,7 +3,7 @@ import { synth } from '../audio/synth';
 import { Piano, type KeyHighlight } from '../components/Piano';
 import { Staff, type EventState } from '../components/Staff';
 import { useComputerKeyboard } from '../input/useComputerKeyboard';
-import { micLabel, useMicInput } from '../input/useMicInput';
+import { micButtonLabel, micLabel, useMicInput } from '../input/useMicInput';
 import { useMidiInput } from '../input/useMidiInput';
 import type { KeyLabelMode, KeyboardSize, SessionConfig } from '../music/difficulty';
 import { eventLabel, generatePrompts, keyboardRangeFor, type Prompt } from '../music/generator';
@@ -415,7 +415,7 @@ export function PracticeScreen({ config, options, title, onFinish, onQuit, onTog
           </div>
         )}
         <span className="hud__hint muted small">Keys from {midiToName(baseMidi)}</span>
-        <button type="button" className={`btn btn--ghost mic mic--${mic.state}`} onClick={onToggleMic} aria-pressed={options.micInput} aria-label="Microphone input" title="Listen for a real piano through the microphone">
+        <button type="button" className={`btn btn--ghost mic mic--${mic.state}`} onClick={onToggleMic} aria-pressed={options.micInput} aria-label={micButtonLabel(options.micInput, mic)} title="Listen for a real piano through the microphone">
           <span aria-hidden="true">🎤</span>
           {options.micInput && <span className="mic__note small">{micLabel(mic, (m) => midiToName(m))}</span>}
         </button>
