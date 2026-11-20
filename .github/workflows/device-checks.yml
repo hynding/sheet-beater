@@ -1,0 +1,165 @@
+name: Device checks
+
+# Runs the app where it actually ships: Safari's and Firefox's engines, the Android app in an
+# emulator and the iOS app in a simulator. Screenshots are uploaded as artifacts.
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'src/**'
+      - 'e2e/**'
+      - 'android/**'
+      - 'ios/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package*.json'
+      - 'vite.config.ts'
+      - 'capacitor.config.json'
+      - '.github/workflows/device-checks.yml'
+  workflow_dispatch:
+
+env:
+  PLAYWRIGHT_VERSION: 1.63.0
+
+jobs:
+  browsers:
+    name: Safari and Firefox engines
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm install --no-save playwright@$PLAYWRIGHT_VERSION
+      - run: npx playwright install webkit firefox
+      - name: Serve the built app
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          for i in $(seq 1 30); do curl -sf http://localhost:4173/ >/dev/null && break; sleep 1; done
+      - run: mkdir -p shots
+      - name: Safari engine, phone shape with touch
+        run: node e2e/browser.cjs webkit http://localhost:4173/ phone shots
+      - name: Safari engine, desktop
+        if: always()
+        run: node e2e/browser.cjs webkit http://localhost:4173/ desktop shots
+      - name: Firefox, desktop
+        if: always()
+        run: node e2e/browser.cjs firefox http://localhost:4173/ desktop shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-screenshots
+          path: shots
+
+  android:
+    name: Android app in an emulator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-36 build-tools;36.0.0
+          accept-android-sdk-licenses: true
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+      - run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+        working-directory: android
+      - run: npm install --no-save playwright@$PLAYWRIGHT_VERSION
+      - name: Allow hardware acceleration for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - run: mkdir -p shots
+      - name: Install the app and run the checks inside it
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim
+          script: |
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            node e2e/android.cjs shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-screenshots
+          path: shots
+
+  ios:
+    name: iOS app in a simulator
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync ios
+      - name: Pick and boot the newest iPhone simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          found = []
+          for runtime, devices in json.load(sys.stdin)['devices'].items():
+              if 'SimRuntime.iOS-' not in runtime:
+                  continue
+              version = [int(n) for n in runtime.split('iOS-')[1].split('-')]
+              for d in devices:
+                  if d['name'].startswith('iPhone'):
+                      found.append((version, d['name'], d['udid']))
+          found.sort()
+          print(found[-1][2])
+          print(found[-1][1], found[-1][0], file=sys.stderr)
+          ")
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+      - name: Build for the simulator
+        working-directory: ios/App
+        run: >
+          xcodebuild -project App.xcodeproj -scheme App -configuration Debug
+          -sdk iphonesimulator -destination "id=$UDID" -derivedDataPath build
+          build | tail -n 20
+      - name: Install and launch
+        run: |
+          mkdir -p shots
+          xcrun simctl install "$UDID" ios/App/build/Build/Products/Debug-iphonesimulator/App.app
+          xcrun simctl launch "$UDID" com.sheetbeater.app
+          sleep 20
+          xcrun simctl io "$UDID" screenshot shots/ios-00-launch.png
+          xcrun simctl spawn "$UDID" log show --last 2m --style compact --predicate 'process == "App"' | grep -E '⚡️|Fault|Error' | tail -n 60 || true
+      - name: Drive the app by touch
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          export PATH="$PATH:$HOME/.maestro/bin"
+          export MAESTRO_CLI_NO_ANALYTICS=1
+          export MAESTRO_DRIVER_STARTUP_TIMEOUT=240000
+          maestro --device "$UDID" test e2e/ios/flow.yaml
+      - name: App log
+        if: always()
+        run: xcrun simctl spawn "$UDID" log show --last 10m --style compact --predicate 'process == "App"' | grep -E '⚡️' | tail -n 80 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-screenshots
+          path: |
+            shots
+            ~/.maestro/tests

@@ -1,0 +1,54 @@
+# Drives the installed iOS app in a simulator through its real touch layer.
+appId: com.sheetbeater.app
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Free play"
+    timeout: 90000
+- takeScreenshot: shots/ios-01-start
+
+# A lesson: the intro, then the practice screen with notation and keyboard.
+- tapOn: "Three landmarks.*"
+- extendedWaitUntil:
+    visible: "Start lesson"
+    timeout: 30000
+- takeScreenshot: shots/ios-02-lesson-intro
+- tapOn: "Start lesson"
+- extendedWaitUntil:
+    visible: "Quit session"
+    timeout: 30000
+- takeScreenshot: shots/ios-03-practice
+- tapOn: "C4"
+- takeScreenshot: shots/ios-04-after-a-key
+- tapOn: "Quit session"
+- tapOn: "Back to path"
+
+# The player piano: it has to reach the second bar on its own.
+- tapOn: "Free play"
+- tapOn: "Canon in D.*"
+- extendedWaitUntil:
+    visible: "Play"
+    timeout: 30000
+- tapOn: "Play"
+- extendedWaitUntil:
+    visible: "Bar [2-9] / 16"
+    timeout: 30000
+- takeScreenshot: shots/ios-05-player-piano
+- tapOn: "Stop"
+
+# The microphone: the system permission alert, then the app's own status.
+- tapOn: "Microphone input"
+- extendedWaitUntil:
+    visible: ".*Would Like to Access the Microphone.*"
+    timeout: 15000
+    optional: true
+- takeScreenshot: shots/ios-06-mic-prompt
+- tapOn:
+    text: "Allow|OK"
+    optional: true
+- extendedWaitUntil:
+    visible: "Listening|Hearing .*"
+    timeout: 20000
+    optional: true
+- takeScreenshot: shots/ios-07-mic-status
