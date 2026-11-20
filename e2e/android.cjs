@@ -30,6 +30,8 @@ async function findAllowButton(device) {
   const screenshot = shots ? (name) => device.screenshot({ path: `${shots}/android-${name}.png` }) : undefined;
 
   await device.shell(`pm clear ${PKG}`);
+  // A fresh device shows a one-time "Viewing full screen" tip over the first full-screen app, which would cover the dialog below.
+  await device.shell('settings put secure immersive_mode_confirmations confirmed');
   await device.shell(`am start -n ${PKG}/.MainActivity`);
   const webview = await device.webView({ pkg: PKG }, { timeout: 120000 });
   const page = await webview.page();

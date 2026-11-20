@@ -102,6 +102,12 @@ Every time the web code changes, run `npm run cap:sync` before building the nati
 - Web MIDI is not available inside the native WebView, so MIDI keyboards only work in Chrome and Edge on desktop. A native MIDI plugin would be needed for mobile MIDI support. Microphone input is the way to use a real instrument on phones and tablets.
 - The service worker is only registered in the browser; the native shell ships its own copy of the web build.
 - `.github/workflows/mobile.yml` builds a debug APK on Ubuntu and an unsigned simulator build on macOS for every push, so both native projects are checked continuously. Release signing is deliberately left out of CI.
+- `.github/workflows/device-checks.yml` runs the app where it ships, on GitHub's hosted machines, and uploads screenshots as artifacts:
+  - **Safari's and Firefox's engines** run the smoke checks in `e2e/checks.cjs`: the start screen, notation with the music font, a whole lesson answered correctly, layout, a rhythm lesson on the audio clock, the player piano and play along, and the microphone switch.
+  - **The Android app** is installed in an emulator and the same checks run inside its web view, including the system microphone dialog.
+  - **The iOS app** is launched in a simulator and driven by touch with [Maestro](https://maestro.mobile.dev) from `e2e/ios/flow.yaml`.
+
+  To run the browser checks locally: `npm run build && npx vite preview --port 4173`, then `node e2e/browser.cjs chromium http://localhost:4173/ phone` with Playwright installed. Emulators have no real microphone or speaker, so sound quality, real microphone levels and Bluetooth delay still need a device in hand.
 
 ## Project layout
 
@@ -115,6 +121,7 @@ src/
   input/        Web MIDI, computer-keyboard and microphone hooks
   components/   Staff (VexFlow) and Piano
   screens/      Start (Learn path, Free practice, Free play), Lesson intro, Practice, Free play and Results screens
+e2e/           device checks: shared smoke checks, browser and Android runners, the iOS touch flow
 android/        Capacitor Android project (open in Android Studio)
 ios/            Capacitor iOS project (open in Xcode, macOS only)
 assets/         source images for app icons and splash screens
