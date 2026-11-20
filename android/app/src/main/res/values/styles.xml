@@ -13,6 +13,10 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Match the app's dark background whenever the system bars do show. -->
+        <item name="android:statusBarColor">#121318</item>
+        <item name="android:navigationBarColor">#121318</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 
 
