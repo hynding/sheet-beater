@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { synth } from './audio/synth';
+import { lockLandscape } from './platform/orientation';
 import type { Lesson } from './curriculum/lessons';
 import { lessonAfter, loadProgress, recordResult, saveProgress, type Progress, type Stars } from './curriculum/progress';
 import { useMidiInput } from './input/useMidiInput';
@@ -75,8 +76,7 @@ export default function App() {
   const beginSession = useCallback(
     (config: SessionConfig, source: Source, lesson?: Lesson) => {
       synth.unlock();
-      const orientation = window.screen.orientation as { lock?: (o: string) => Promise<void> } | undefined;
-      orientation?.lock?.('landscape').catch(() => undefined);
+      lockLandscape();
       // Single-note sessions lean toward the positions this learner has been missing.
       const adaptive = config.mode === 'single' ? { ...config, focus: focusWeights(mastery) } : config;
       setScreen({ name: 'practice', run: Date.now(), config: adaptive, source, lesson });

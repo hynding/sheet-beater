@@ -5,7 +5,9 @@ const { runChecks } = require('./checks.cjs');
 
 (async () => {
   const [engine = 'chromium', url = 'http://localhost:4173/', shape = 'desktop', shots] = process.argv.slice(2);
-  const browser = await playwright[engine].launch();
+  // Firefox can stand in a silent microphone; without this its permission prompt waits forever with nobody to answer it.
+  const launch = engine === 'firefox' ? { firefoxUserPrefs: { 'media.navigator.streams.fake': true, 'media.navigator.permission.disabled': true } } : {};
+  const browser = await playwright[engine].launch(launch);
   const phone = shape === 'phone';
   const context = await browser.newContext(
     phone
@@ -16,7 +18,7 @@ const { runChecks } = require('./checks.cjs');
   await page.goto(url);
   console.log(`${engine} ${browser.version()} as ${shape}: ${await page.evaluate(() => navigator.userAgent)}`);
   const screenshot = shots ? (name) => page.screenshot({ path: `${shots}/${engine}-${shape}-${name}.png` }) : undefined;
-  const { failed } = await runChecks(page, { touch: phone, mic: 'optional', screenshot });
+  const { failed } = await runChecks(page, { touch: phone, mic: engine === 'firefox' ? 'required' : 'optional', screenshot });
   if (screenshot) await screenshot('end');
   await browser.close();
   process.exit(failed ? 1 : 0);

@@ -4,10 +4,23 @@ const { _android: android } = require('playwright');
 const { runChecks } = require('./checks.cjs');
 
 const PKG = 'com.sheetbeater.app';
-const ALLOW_BUTTONS = [
-  'com.android.permissioncontroller:id/permission_allow_foreground_only_button',
-  'com.android.permissioncontroller:id/permission_allow_button',
-];
+const ALLOW_BUTTONS = ['permission_allow_foreground_only_button', 'permission_allow_button'];
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Finds a button of the system permission dialog on screen and returns the point to tap, using only adb. */
+async function findAllowButton(device) {
+  const xml = (await device.shell('uiautomator dump /sdcard/window.xml >/dev/null 2>&1; cat /sdcard/window.xml')).toString();
+  for (const id of ALLOW_BUTTONS) {
+    const node = xml.match(new RegExp(`<node[^>]*resource-id="[^"]*:id/${id}"[^>]*>`));
+    const bounds = node?.[0].match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
+    if (bounds) {
+      const [x1, y1, x2, y2] = bounds.slice(1).map(Number);
+      return { id, x: Math.round((x1 + x2) / 2), y: Math.round((y1 + y2) / 2) };
+    }
+  }
+  return null;
+}
 
 (async () => {
   const shots = process.argv[2];
@@ -26,26 +39,34 @@ const ALLOW_BUTTONS = [
   console.log(`microphone permission before the app asks: granted=${await granted()}`);
   if (screenshot) await screenshot('start');
 
+  const rotation = (await device.shell('dumpsys window displays')).toString().match(/mCurrentRotation=(\w+)|mRotation=(\w+)/);
+  console.log(`display rotation with the app open: ${rotation ? rotation[1] ?? rotation[2] : 'unknown'}`);
+
   // The app asks for the microphone only when its switch is turned on; answer the system dialog like a person would.
   const onMicPrompt = async () => {
-    for (let attempt = 0; attempt < 40; attempt++) {
-      for (const res of ALLOW_BUTTONS) {
-        if (await device.info({ res }).then(() => true, () => false)) {
-          if (screenshot) await screenshot('mic-prompt');
-          await device.tap({ res });
-          console.log(`system microphone dialog appeared and was allowed (${res.split('/')[1]})`);
-          return;
-        }
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const button = await findAllowButton(device);
+      if (button) {
+        if (screenshot) await screenshot('mic-prompt');
+        await device.shell(`input tap ${button.x} ${button.y}`);
+        console.log(`system microphone dialog appeared and was allowed (${button.id})`);
+        return;
       }
-      await new Promise((r) => setTimeout(r, 250));
+      await sleep(500);
     }
     console.log('no system microphone dialog appeared within 10 s');
   };
 
   const { failed } = await runChecks(page, { touch: false, mic: 'required', onMicPrompt, screenshot });
   console.log(`microphone permission afterwards: granted=${await granted()}`);
-  const rotation = (await device.shell('dumpsys window displays')).toString().match(/mCurrentRotation=(\w+)|mRotation=(\w+)/);
-  console.log(`display rotation: ${rotation ? rotation[1] ?? rotation[2] : 'unknown'}`);
+  const running = (await device.shell(`pidof ${PKG}`)).toString().trim();
+  console.log(`app process at the end: ${running ? `running (pid ${running})` : 'NOT RUNNING'}`);
+  const crashes = (await device.shell('logcat -d -b crash -t 80')).toString().trim();
+  if (crashes) console.log(`crash log:\n${crashes}`);
+  if (!running || failed) {
+    const log = (await device.shell('logcat -d -t 400 -s Capacitor:* Capacitor/Console:* chromium:* cr_media:* ActivityManager:I AndroidRuntime:*')).toString();
+    console.log(`recent app log:\n${log.split('\n').slice(-120).join('\n')}`);
+  }
   if (screenshot) await screenshot('end');
   await device.close();
   process.exit(failed ? 1 : 0);

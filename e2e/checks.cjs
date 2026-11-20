@@ -6,18 +6,28 @@ const noteName = (midi) => `${SHARP[midi % 12]}${Math.floor(midi / 12) - 1}`;
 const UNITS = { treble: 5, bass: 5, grand: 4, phrases: 3, accidentals: 4, keys: 6, chords: 4, rhythm: 6 };
 
 async function seed(page) {
-  await page.evaluate((units) => {
-    const progress = {};
-    for (const [unit, count] of Object.entries(units)) {
-      for (let i = 1; i <= count; i++) {
-        progress[`${unit}.${i}`] = { stars: 1, bestAccuracy: 0.8, bestAvgMs: 3000, attempts: 1, lastPlayedAt: Date.now() };
-      }
-    }
-    localStorage.setItem('sheet-beater.progress.v1', JSON.stringify(progress));
-    localStorage.setItem('sheet-beater.settings.v2', JSON.stringify({ sound: true }));
-  }, UNITS);
-  await page.reload();
+  // The app saves its state once right after it mounts, so wait for that before writing over it.
   await page.waitForSelector('.tab');
+  await page.waitForTimeout(500);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await page.evaluate((units) => {
+      const progress = {};
+      for (const [unit, count] of Object.entries(units)) {
+        for (let i = 1; i <= count; i++) {
+          progress[`${unit}.${i}`] = { stars: 1, bestAccuracy: 0.8, bestAvgMs: 3000, attempts: 1, lastPlayedAt: Date.now() };
+        }
+      }
+      localStorage.setItem('sheet-beater.progress.v1', JSON.stringify(progress));
+      localStorage.setItem('sheet-beater.settings.v2', JSON.stringify({ sound: true }));
+    }, UNITS);
+    await page.reload();
+    await page.waitForSelector('.tab');
+    const locked = await page.locator('.lesson--locked').count();
+    if (locked === 0) return;
+    console.log(`seeding progress, attempt ${attempt}: ${locked} lessons still locked`);
+    await page.waitForTimeout(1000);
+  }
+  throw new Error('could not unlock the lessons for the checks');
 }
 
 async function press(page, selector, touch) {
