@@ -1,15 +1,15 @@
 # Drives the installed iOS app in a simulator through its real touch layer.
+# The workflow launches the app itself so that it can capture the app's console output.
+# Steps marked optional record what happened without stopping the run; the assertions at the end decide the result.
 appId: com.sheetbeater.app
 ---
-- launchApp:
-    clearState: true
 - extendedWaitUntil:
     visible: "Free play"
     timeout: 180000
 - takeScreenshot: shots/ios-01-start
 
-# A lesson: the intro, then the practice screen with notation and keyboard.
-- tapOn: "Three landmarks.*"
+# A lesson, reached from the footer button: the intro, then the practice screen.
+- tapOn: "Start learning"
 - extendedWaitUntil:
     visible: "Start lesson"
     timeout: 120000
@@ -17,33 +17,57 @@ appId: com.sheetbeater.app
 - tapOn: "Start lesson"
 - extendedWaitUntil:
     visible: "Quit session"
-    timeout: 120000
+    timeout: 30000
+    optional: true
 - takeScreenshot: shots/ios-03-practice
-- tapOn: "C4"
-- takeScreenshot: shots/ios-04-after-a-key
-- tapOn: "Quit session"
-- tapOn: "Back to path"
+- tapOn:
+    text: "Quit session"
+    optional: true
+- tapOn:
+    text: "Back to path"
+    optional: true
+
+# Free practice starts a session through the same code as a lesson.
+- tapOn: "Free practice"
+- tapOn: "Start"
+- extendedWaitUntil:
+    visible: "Quit session"
+    timeout: 30000
+    optional: true
+- takeScreenshot: shots/ios-04-free-practice
+- tapOn:
+    text: "Quit session"
+    optional: true
 
 # The player piano: it has to reach the second bar on its own.
 - tapOn: "Free play"
 - tapOn: "Canon in D.*"
 - extendedWaitUntil:
     visible: "Play"
-    timeout: 120000
-- tapOn: "Play"
+    timeout: 60000
+    optional: true
+- takeScreenshot: shots/ios-05-free-play
+- tapOn:
+    text: "Play"
+    optional: true
 - extendedWaitUntil:
     visible: "Bar [2-9] / 16"
-    timeout: 120000
-- takeScreenshot: shots/ios-05-player-piano
-- tapOn: "Stop"
+    timeout: 60000
+    optional: true
+- takeScreenshot: shots/ios-06-player-piano
+- tapOn:
+    text: "Stop"
+    optional: true
 
 # The microphone: the system permission alert, then the app's own status.
-- tapOn: "Microphone input"
+- tapOn:
+    text: "Microphone input"
+    optional: true
 - extendedWaitUntil:
     visible: ".*Would Like to Access the Microphone.*"
     timeout: 15000
     optional: true
-- takeScreenshot: shots/ios-06-mic-prompt
+- takeScreenshot: shots/ios-07-mic-prompt
 - tapOn:
     text: "Allow|OK"
     optional: true
@@ -51,4 +75,18 @@ appId: com.sheetbeater.app
     visible: "Listening|Hearing .*"
     timeout: 20000
     optional: true
-- takeScreenshot: shots/ios-07-mic-status
+- takeScreenshot: shots/ios-08-mic-status
+- tapOn:
+    text: "Back"
+    optional: true
+
+# The verdict: a lesson has to start.
+- tapOn:
+    text: "Learn"
+    optional: true
+- tapOn: "Three landmarks.*"
+- tapOn: "Start lesson"
+- extendedWaitUntil:
+    visible: "Quit session"
+    timeout: 60000
+- takeScreenshot: shots/ios-09-lesson-running

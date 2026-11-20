@@ -145,10 +145,10 @@ jobs:
         run: |
           mkdir -p shots
           xcrun simctl install "$UDID" ios/App/build/Build/Products/Debug-iphonesimulator/App.app
-          xcrun simctl launch "$UDID" com.sheetbeater.app
+          # Capacitor prints the web app's console and script errors to standard output in debug builds.
+          xcrun simctl launch --stdout="$PWD/shots/ios-app-console.log" --stderr="$PWD/shots/ios-app-stderr.log" "$UDID" com.sheetbeater.app
           sleep 20
           xcrun simctl io "$UDID" screenshot shots/ios-00-launch.png
-          xcrun simctl spawn "$UDID" log show --last 2m --style compact --predicate 'process == "App"' | grep -E '⚡️|Fault|Error' | tail -n 60 || true
       - name: Drive the app by touch
         run: |
           curl -fsSL "https://get.maestro.mobile.dev" | bash
@@ -156,9 +156,11 @@ jobs:
           export MAESTRO_CLI_NO_ANALYTICS=1
           export MAESTRO_DRIVER_STARTUP_TIMEOUT=240000
           maestro --device "$UDID" test e2e/ios/flow.yaml
-      - name: App log
+      - name: App console
         if: always()
-        run: xcrun simctl spawn "$UDID" log show --last 10m --style compact --predicate 'process == "App"' | grep -E '⚡️' | tail -n 80 || true
+        run: |
+          echo "--- console ---"; grep -v 'Loading app at\|Handling local request' shots/ios-app-console.log | tail -n 150 || true
+          echo "--- stderr ---"; tail -n 40 shots/ios-app-stderr.log || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
